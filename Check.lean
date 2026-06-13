@@ -1,0 +1,5 @@
+import IrrationalityAr.Characterization
+
+#print axioms IrrationalityAr.rational_iff_eventuallyAP
+#print axioms IrrationalityAr.irrational_no_infiniteAP
+#print axioms IrrationalityAr.rational_eventuallyAP
