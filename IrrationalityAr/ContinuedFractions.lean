@@ -555,6 +555,41 @@ def IsConvergentOrSemiconvergent (α : ℝ) (p q : ℕ) : Prop :=
     ((∃ n : ℕ, IsConvergentOf a n p q) ∨
       ∃ n t : ℕ, IsSemiconvergentOf a n t p q)
 
+/-- The parity-filtered principal/intermediate convergent denominator set. -/
+def oddCFDenoms (α : ℝ) : Set ℕ :=
+  {q : ℕ |
+    ∃ p : ℕ,
+      2 ≤ q ∧ ReducedFraction p q ∧
+        IsConvergentOrSemiconvergent α p q ∧ Odd p}
+
+/-- A denominator occurring in the full principal/intermediate denominator path
+of the coefficient sequence `a`. -/
+def CFDenominatorPath (a : ℕ → ℕ) (Q : ℕ) : Prop :=
+  ∃ n t : ℕ,
+    1 ≤ t ∧ t ≤ a (n + 1) ∧
+      Q = continuantDenPrev a n + t * continuantDen a n
+
+/-- A parity-selected numerator/denominator pair in the full
+principal/intermediate path of `a`. -/
+def OddCFPathPair (a : ℕ → ℕ) (P Q : ℕ) : Prop :=
+  ∃ n t : ℕ,
+    1 ≤ t ∧ t ≤ a (n + 1) ∧
+      P = continuantNumPrev a n + t * continuantNum a n ∧
+      Q = continuantDenPrev a n + t * continuantDen a n ∧
+      Odd P
+
+theorem oddCFDenoms_mem_of_oddCFPathPair
+    {α : ℝ} {a : ℕ → ℕ} {P Q : ℕ}
+    (hcf : IsSimpleCFExpansion α a)
+    (hpair : OddCFPathPair a P Q)
+    (hQ : 2 ≤ Q)
+    (hred : ReducedFraction P Q) :
+    Q ∈ oddCFDenoms α := by
+  rcases hpair with ⟨n, t, ht1, htle, hP, hQeq, hOdd⟩
+  refine ⟨P, hQ, hred, ?_, hOdd⟩
+  refine ⟨a, hcf, Or.inr ?_⟩
+  refine ⟨n, t, ht1, htle, hP, hQeq⟩
+
 private theorem continuantNum_succ (a : ℕ → ℕ) (n : ℕ) :
     continuantNum a (n + 1) =
       a (n + 1) * continuantNum a n + continuantNumPrev a n := by
@@ -698,6 +733,18 @@ private theorem continuant_det (a : ℕ → ℕ) (n : ℕ) :
         _ = (-1 : ℤ) ^ (n + 1 + 1) := by
               rw [pow_succ]
               ring
+
+private theorem continuantNum_coprime_prev (a : ℕ → ℕ) :
+    ∀ n : ℕ, Nat.Coprime (continuantNum a n) (continuantNumPrev a n)
+  | 0 => by
+      simp [continuantNumPrev]
+  | n + 1 => by
+      rw [continuantNum_succ, continuantNumPrev_succ]
+      have ih : Nat.Coprime (continuantNum a n) (continuantNumPrev a n) :=
+        continuantNum_coprime_prev a n
+      simpa [Nat.add_comm, Nat.mul_comm, Nat.coprime_comm] using
+        (Nat.coprime_add_mul_right_left
+          (continuantNumPrev a n) (continuantNum a n) (a (n + 1))).mpr ih.symm
 
 private theorem floor_add_floor_int_sub_of_not_int (z : ℤ) {x : ℝ}
     (hnot : ∀ m : ℤ, x ≠ (m : ℝ)) :
@@ -3763,5 +3810,1869 @@ theorem A_eq_odd_convergent_or_semiconvergent {α : ℝ}
     refine ⟨p, n + 1, ?_, ?_, hred, hcf, hpodd⟩ <;> omega
   · rintro ⟨p, q, rfl, hq, hred, hcf, hpodd⟩
     exact mem_A_of_odd_convergent_or_semiconvergent hαpos hirr hq hred hcf hpodd
+
+/-- The canonical sequence `simplePartialQuotient α` is itself a simple
+continued-fraction expansion of a positive irrational `α`.
+
+This exports the concrete witness used by
+`exists_simpleCFExpansion_of_irrational`. -/
+theorem simplePartialQuotient_isSimpleCFExpansion
+    {α : ℝ} (hαpos : 0 < α) (hirr : IsIrrational α) :
+    IsSimpleCFExpansion α (simplePartialQuotient α) := by
+  refine ⟨?_, ?_, ?_⟩
+  · intro n
+    exact simplePartialQuotient_succ_pos hαpos hirr n
+  · exact convergents_tendsto_of_tails
+      (fun n => simplePartialQuotient_succ_pos hαpos hirr n)
+      (hasContinuedFractionTails_simplePartialQuotient hαpos hirr)
+  · exact hasContinuedFractionTails_simplePartialQuotient hαpos hirr
+
+/-- Continuant numerators only depend on the coefficient sequence. -/
+theorem continuantNum_eq_of_coeff_eq {a b : ℕ → ℕ}
+    (h : ∀ n : ℕ, a n = b n) :
+    ∀ n : ℕ, continuantNum a n = continuantNum b n := by
+  intro n
+  induction n using Nat.twoStepInduction with
+  | zero =>
+      simp [continuantNum, h 0]
+  | one =>
+      simp [continuantNum, h 0, h 1]
+  | more n ih0 ih1 =>
+      rw [continuantNum, continuantNum]
+      rw [h (n + 2), ih1, ih0]
+
+/-- Continuant denominators only depend on the coefficient sequence. -/
+theorem continuantDen_eq_of_coeff_eq {a b : ℕ → ℕ}
+    (h : ∀ n : ℕ, a n = b n) :
+    ∀ n : ℕ, continuantDen a n = continuantDen b n := by
+  intro n
+  induction n using Nat.twoStepInduction with
+  | zero =>
+      simp [continuantDen]
+  | one =>
+      simp [continuantDen, h 1]
+  | more n ih0 ih1 =>
+      rw [continuantDen, continuantDen]
+      rw [h (n + 2), ih1, ih0]
+
+/-- Positive irrational real numbers are determined by all of their canonical
+simple continued-fraction partial quotients. -/
+theorem eq_of_simplePartialQuotient_eq
+    {x y : ℝ}
+    (hxpos : 0 < x) (hypos : 0 < y)
+    (hxirr : IsIrrational x) (hyirr : IsIrrational y)
+    (hcoeff : ∀ n : ℕ,
+      simplePartialQuotient x n = simplePartialQuotient y n) :
+    x = y := by
+  let ax : ℕ → ℕ := simplePartialQuotient x
+  let ay : ℕ → ℕ := simplePartialQuotient y
+  have hxcf : IsSimpleCFExpansion x ax := by
+    simpa [ax] using simplePartialQuotient_isSimpleCFExpansion hxpos hxirr
+  have hycf : IsSimpleCFExpansion y ay := by
+    simpa [ay] using simplePartialQuotient_isSimpleCFExpansion hypos hyirr
+  have hcoeff' : ∀ n : ℕ, ax n = ay n := by
+    intro n
+    exact hcoeff n
+  have hnum : ∀ n : ℕ, continuantNum ax n = continuantNum ay n :=
+    continuantNum_eq_of_coeff_eq hcoeff'
+  have hden : ∀ n : ℕ, continuantDen ax n = continuantDen ay n :=
+    continuantDen_eq_of_coeff_eq hcoeff'
+  have hseq :
+      (fun n : ℕ =>
+        (continuantNum ax n : ℝ) / (continuantDen ax n : ℝ)) =
+      (fun n : ℕ =>
+        (continuantNum ay n : ℝ) / (continuantDen ay n : ℝ)) := by
+    funext n
+    rw [hnum n, hden n]
+  have hxlim :
+      Tendsto
+        (fun n : ℕ =>
+          (continuantNum ax n : ℝ) / (continuantDen ax n : ℝ))
+        atTop (𝓝 x) := hxcf.2.1
+  have hylim_on_xseq :
+      Tendsto
+        (fun n : ℕ =>
+          (continuantNum ax n : ℝ) / (continuantDen ax n : ℝ))
+        atTop (𝓝 y) := by
+    simpa [hseq] using hycf.2.1
+  exact tendsto_nhds_unique hxlim hylim_on_xseq
+
+/-- If two positive irrational reals are unequal, their canonical simple
+continued-fraction partial quotient sequences have a first differing index. -/
+theorem exists_firstDiff_simplePartialQuotient_of_ne
+    {x y : ℝ}
+    (hxpos : 0 < x) (hypos : 0 < y)
+    (hxirr : IsIrrational x) (hyirr : IsIrrational y)
+    (hxy : x ≠ y) :
+    ∃ j : ℕ,
+      (∀ i : ℕ, i < j →
+        simplePartialQuotient x i = simplePartialQuotient y i) ∧
+      simplePartialQuotient x j ≠ simplePartialQuotient y j := by
+  classical
+  by_contra hno
+  have hall : ∀ i : ℕ,
+      simplePartialQuotient x i = simplePartialQuotient y i := by
+    intro i
+    by_contra hi
+    let P : ℕ → Prop := fun n =>
+      simplePartialQuotient x n ≠ simplePartialQuotient y n
+    have hex : ∃ n : ℕ, P n := ⟨i, hi⟩
+    let j : ℕ := Nat.find hex
+    have hjdiff : P j := Nat.find_spec hex
+    have hprefix : ∀ k : ℕ, k < j →
+        simplePartialQuotient x k = simplePartialQuotient y k := by
+      intro k hk
+      by_contra hkdiff
+      exact (Nat.find_min hex hk) hkdiff
+    exact hno ⟨j, hprefix, hjdiff⟩
+  exact hxy (eq_of_simplePartialQuotient_eq
+    hxpos hypos hxirr hyirr hall)
+
+/-- If the canonical finite expansion of `p / q` agrees with the expansion
+`a` through its last coefficient, then the denominator `q` lies in the
+principal/intermediate denominator path of `a`.
+
+Since `q ≥ 2`, the finite continued fraction has positive length, and the
+last principal denominator is the last semiconvergent in the previous block. -/
+private theorem CFDenominatorPath_of_agreesThrough
+    {α : ℝ} {a : ℕ → ℕ} {p q : ℕ}
+    (hcf : IsSimpleCFExpansion α a)
+    (hred : ReducedFraction p q)
+    (e : CanonicalFiniteCF p q)
+    (hagree : e.AgreesThrough a) :
+    CFDenominatorPath a q := by
+  rcases hcf with ⟨hpos, htendsto, htails⟩
+  have hfinite :
+      finiteCFExact e.coeff e.last = finiteCFExact a e.last := by
+    exact finiteCFExact_eq_of_eq_on_prefix e.coeff a e.last
+      (by
+        intro i hi
+        exact hagree i hi)
+
+  have hpos_prefix :
+      ∀ i : ℕ, 1 ≤ i → i ≤ e.last → 0 < a i := by
+    intro i hi1 _
+    cases i with
+    | zero => omega
+    | succ k =>
+        simpa [Nat.succ_eq_add_one] using hpos k
+
+  have hvalue :
+      ratValue p q =
+        ratValue (continuantNum a e.last) (continuantDen a e.last) := by
+    rw [e.value_eq, hfinite,
+      finiteCFExact_eq_ratValue_continuants a e.last hpos_prefix]
+
+  have hred_conv : ReducedFraction
+      (continuantNum a e.last) (continuantDen a e.last) :=
+    reducedFraction_continuant a hpos e.last
+
+  have hpq :=
+    reducedFraction_eq_of_ratValue_eq hred hred_conv hvalue
+
+  rcases Nat.exists_eq_succ_of_ne_zero (Nat.ne_of_gt e.last_pos) with
+    ⟨n, hlast⟩
+  refine ⟨n, a (n + 1), ?_, le_rfl, ?_⟩
+  · exact Nat.succ_le_iff.mpr (hpos n)
+  · calc
+      q = continuantDen a (n + 1) := by
+            simpa [hlast, Nat.succ_eq_add_one] using hpq.2
+      _ = a (n + 1) * continuantDen a n +
+            continuantDenPrev a n := by
+            exact continuantDen_succ a n
+      _ = continuantDenPrev a n +
+            a (n + 1) * continuantDen a n := by
+            omega
+
+/-- Terminal first-difference case with a smaller finite coefficient:
+the denominator lies in the canonical semiconvergent path. -/
+private theorem CFDenominatorPath_of_firstDifference_last_lt
+    {α : ℝ} {a : ℕ → ℕ} {p q : ℕ}
+    (hcf : IsSimpleCFExpansion α a)
+    (hred : ReducedFraction p q)
+    (e : CanonicalFiniteCF p q) {j : ℕ}
+    (hdiff : e.FirstDifference a j)
+    (hjlast : j = e.last)
+    (hb_lt_ha : e.coeff j < a j) :
+    CFDenominatorPath a q := by
+  rcases hcf with ⟨hpos, htendsto, htails⟩
+  rcases hdiff with ⟨hj1, hjle, hprefix, hne⟩
+  let n : ℕ := j - 1
+  let t : ℕ := e.coeff j
+
+  have hn_succ : n + 1 = j := by
+    dsimp [n]
+    omega
+
+  have htpos : 1 ≤ t := by
+    dsimp [t]
+    exact e.positive_after_head j hj1 hjle
+
+  have htlea : t ≤ a (n + 1) := by
+    dsimp [t]
+    rw [hn_succ]
+    exact Nat.le_of_lt hb_lt_ha
+
+  have hqform :=
+    (num_den_of_firstDifference_last hred e
+      (show e.FirstDifference a j from ⟨hj1, hjle, hprefix, hne⟩)
+      hjlast).2
+
+  refine ⟨n, t, htpos, htlea, ?_⟩
+  calc
+    q = e.coeff j * continuantDen a (j - 1) +
+          continuantDenPrev a (j - 1) := hqform
+    _ = continuantDenPrev a n + t * continuantDen a n := by
+          dsimp [n, t]
+          omega
+
+/-- Terminal first-difference case with `e.coeff j = a j + 1`:
+the denominator is the first semiconvergent in the next block. -/
+private theorem CFDenominatorPath_of_firstDifference_last_succ
+    {α : ℝ} {a : ℕ → ℕ} {p q : ℕ}
+    (hcf : IsSimpleCFExpansion α a)
+    (hred : ReducedFraction p q)
+    (e : CanonicalFiniteCF p q) {j : ℕ}
+    (hdiff : e.FirstDifference a j)
+    (hjlast : j = e.last)
+    (hsucc : e.coeff j = a j + 1) :
+    CFDenominatorPath a q := by
+  rcases hcf with ⟨hpos, htendsto, htails⟩
+  rcases hdiff with ⟨hj1, hjle, hprefix, hne⟩
+  let n : ℕ := j - 1
+
+  have hn_succ : n + 1 = j := by
+    dsimp [n]
+    omega
+
+  have hnumden :=
+    num_den_of_firstDifference_last hred e
+      (show e.FirstDifference a j from ⟨hj1, hjle, hprefix, hne⟩)
+      hjlast
+
+  have hdenj :
+      continuantDen a j =
+        a j * continuantDen a n + continuantDenPrev a n := by
+    rw [← hn_succ]
+    exact continuantDen_succ a n
+
+  have hdenprevj : continuantDenPrev a j = continuantDen a n := by
+    rw [← hn_succ]
+    exact continuantDenPrev_succ a n
+
+  refine ⟨j, 1, by norm_num, ?_, ?_⟩
+  · exact Nat.succ_le_iff.mpr (hpos j)
+  · calc
+      q = e.coeff j * continuantDen a n +
+            continuantDenPrev a n := hnumden.2
+      _ = (a j + 1) * continuantDen a n +
+            continuantDenPrev a n := by
+            rw [hsucc]
+      _ = continuantDenPrev a j + 1 * continuantDen a j := by
+            rw [hdenj, hdenprevj]
+            ring
+      _ = continuantDenPrev a j + 1 * continuantDen a j := rfl
+
+/-- Pair-path version of `CFDenominatorPath_of_agreesThrough`.
+
+If the canonical finite expansion of `p / q` agrees with `a` through its last
+coefficient, then the whole reduced pair `(p,q)` is the last semiconvergent in
+the previous canonical block. -/
+private theorem CFPathPair_of_agreesThrough
+    {α : ℝ} {a : ℕ → ℕ} {p q : ℕ}
+    (hcf : IsSimpleCFExpansion α a)
+    (hred : ReducedFraction p q)
+    (e : CanonicalFiniteCF p q)
+    (hagree : e.AgreesThrough a) :
+    ∃ n t : ℕ,
+      1 ≤ t ∧ t ≤ a (n + 1) ∧
+        p = continuantNumPrev a n + t * continuantNum a n ∧
+        q = continuantDenPrev a n + t * continuantDen a n := by
+  rcases hcf with ⟨hpos, htendsto, htails⟩
+  have hfinite :
+      finiteCFExact e.coeff e.last = finiteCFExact a e.last := by
+    exact finiteCFExact_eq_of_eq_on_prefix e.coeff a e.last
+      (by
+        intro i hi
+        exact hagree i hi)
+
+  have hpos_prefix :
+      ∀ i : ℕ, 1 ≤ i → i ≤ e.last → 0 < a i := by
+    intro i hi1 _
+    cases i with
+    | zero => omega
+    | succ k =>
+        simpa [Nat.succ_eq_add_one] using hpos k
+
+  have hvalue :
+      ratValue p q =
+        ratValue (continuantNum a e.last) (continuantDen a e.last) := by
+    rw [e.value_eq, hfinite,
+      finiteCFExact_eq_ratValue_continuants a e.last hpos_prefix]
+
+  have hred_conv : ReducedFraction
+      (continuantNum a e.last) (continuantDen a e.last) :=
+    reducedFraction_continuant a hpos e.last
+
+  have hpq :=
+    reducedFraction_eq_of_ratValue_eq hred hred_conv hvalue
+
+  rcases Nat.exists_eq_succ_of_ne_zero (Nat.ne_of_gt e.last_pos) with
+    ⟨n, hlast⟩
+  refine ⟨n, a (n + 1), ?_, le_rfl, ?_, ?_⟩
+  · exact Nat.succ_le_iff.mpr (hpos n)
+  · calc
+      p = continuantNum a (n + 1) := by
+            simpa [hlast, Nat.succ_eq_add_one] using hpq.1
+      _ = a (n + 1) * continuantNum a n +
+            continuantNumPrev a n := by
+            exact continuantNum_succ a n
+      _ = continuantNumPrev a n +
+            a (n + 1) * continuantNum a n := by
+            omega
+  · calc
+      q = continuantDen a (n + 1) := by
+            simpa [hlast, Nat.succ_eq_add_one] using hpq.2
+      _ = a (n + 1) * continuantDen a n +
+            continuantDenPrev a n := by
+            exact continuantDen_succ a n
+      _ = continuantDenPrev a n +
+            a (n + 1) * continuantDen a n := by
+            omega
+
+/-- Pair-path version of `CFDenominatorPath_of_firstDifference_last_lt`. -/
+private theorem CFPathPair_of_firstDifference_last_lt
+    {α : ℝ} {a : ℕ → ℕ} {p q : ℕ}
+    (hcf : IsSimpleCFExpansion α a)
+    (hred : ReducedFraction p q)
+    (e : CanonicalFiniteCF p q) {j : ℕ}
+    (hdiff : e.FirstDifference a j)
+    (hjlast : j = e.last)
+    (hb_lt_ha : e.coeff j < a j) :
+    ∃ n t : ℕ,
+      1 ≤ t ∧ t ≤ a (n + 1) ∧
+        p = continuantNumPrev a n + t * continuantNum a n ∧
+        q = continuantDenPrev a n + t * continuantDen a n := by
+  rcases hcf with ⟨hpos, htendsto, htails⟩
+  rcases hdiff with ⟨hj1, hjle, hprefix, hne⟩
+  let n : ℕ := j - 1
+  let t : ℕ := e.coeff j
+
+  have hn_succ : n + 1 = j := by
+    dsimp [n]
+    omega
+
+  have htpos : 1 ≤ t := by
+    dsimp [t]
+    exact e.positive_after_head j hj1 hjle
+
+  have htlea : t ≤ a (n + 1) := by
+    dsimp [t]
+    rw [hn_succ]
+    exact Nat.le_of_lt hb_lt_ha
+
+  have hnumden :=
+    num_den_of_firstDifference_last hred e
+      (show e.FirstDifference a j from ⟨hj1, hjle, hprefix, hne⟩)
+      hjlast
+
+  refine ⟨n, t, htpos, htlea, ?_, ?_⟩
+  · calc
+      p = e.coeff j * continuantNum a (j - 1) +
+            continuantNumPrev a (j - 1) := hnumden.1
+      _ = continuantNumPrev a n + t * continuantNum a n := by
+            dsimp [n, t]
+            omega
+  · calc
+      q = e.coeff j * continuantDen a (j - 1) +
+            continuantDenPrev a (j - 1) := hnumden.2
+      _ = continuantDenPrev a n + t * continuantDen a n := by
+            dsimp [n, t]
+            omega
+
+/-- Pair-path version of `CFDenominatorPath_of_firstDifference_last_succ`. -/
+private theorem CFPathPair_of_firstDifference_last_succ
+    {α : ℝ} {a : ℕ → ℕ} {p q : ℕ}
+    (hcf : IsSimpleCFExpansion α a)
+    (hred : ReducedFraction p q)
+    (e : CanonicalFiniteCF p q) {j : ℕ}
+    (hdiff : e.FirstDifference a j)
+    (hjlast : j = e.last)
+    (hsucc : e.coeff j = a j + 1) :
+    ∃ n t : ℕ,
+      1 ≤ t ∧ t ≤ a (n + 1) ∧
+        p = continuantNumPrev a n + t * continuantNum a n ∧
+        q = continuantDenPrev a n + t * continuantDen a n := by
+  rcases hcf with ⟨hpos, htendsto, htails⟩
+  rcases hdiff with ⟨hj1, hjle, hprefix, hne⟩
+  let n : ℕ := j - 1
+
+  have hn_succ : n + 1 = j := by
+    dsimp [n]
+    omega
+
+  have hnumden :=
+    num_den_of_firstDifference_last hred e
+      (show e.FirstDifference a j from ⟨hj1, hjle, hprefix, hne⟩)
+      hjlast
+
+  have hnumj :
+      continuantNum a j =
+        a j * continuantNum a n + continuantNumPrev a n := by
+    rw [← hn_succ]
+    exact continuantNum_succ a n
+
+  have hdenj :
+      continuantDen a j =
+        a j * continuantDen a n + continuantDenPrev a n := by
+    rw [← hn_succ]
+    exact continuantDen_succ a n
+
+  have hnumpredj : continuantNumPrev a j = continuantNum a n := by
+    rw [← hn_succ]
+    exact continuantNumPrev_succ a n
+
+  have hdenprevj : continuantDenPrev a j = continuantDen a n := by
+    rw [← hn_succ]
+    exact continuantDenPrev_succ a n
+
+  refine ⟨j, 1, by norm_num, ?_, ?_, ?_⟩
+  · exact Nat.succ_le_iff.mpr (hpos j)
+  · calc
+      p = e.coeff j * continuantNum a n +
+            continuantNumPrev a n := hnumden.1
+      _ = (a j + 1) * continuantNum a n +
+            continuantNumPrev a n := by
+            rw [hsucc]
+      _ = continuantNumPrev a j + 1 * continuantNum a j := by
+            rw [hnumj, hnumpredj]
+            ring
+      _ = continuantNumPrev a j + 1 * continuantNum a j := rfl
+  · calc
+      q = e.coeff j * continuantDen a n +
+            continuantDenPrev a n := hnumden.2
+      _ = (a j + 1) * continuantDen a n +
+            continuantDenPrev a n := by
+            rw [hsucc]
+      _ = continuantDenPrev a j + 1 * continuantDen a j := by
+            rw [hdenj, hdenprevj]
+            ring
+      _ = continuantDenPrev a j + 1 * continuantDen a j := rfl
+
+/-- Direct canonical pair-path recovery for a reduced principal/intermediate
+convergent witness.
+
+This is the strengthened version of `oddCFDenoms_subset_canonical_path`: it
+recovers the numerator attached to the canonical path denominator, not just the
+denominator itself. -/
+private theorem canonical_pair_path_of_convergent_or_semiconvergent
+    {α : ℝ}
+    (hαpos : 0 < α)
+    (hαirr : IsIrrational α)
+    {P Q : ℕ}
+    (hQ2 : 2 ≤ Q)
+    (hred : ReducedFraction P Q)
+    (hcf_any : IsConvergentOrSemiconvergent α P Q) :
+    ∃ n t : ℕ,
+      1 ≤ t ∧ t ≤ simplePartialQuotient α (n + 1) ∧
+        P = continuantNumPrev (simplePartialQuotient α) n +
+              t * continuantNum (simplePartialQuotient α) n ∧
+        Q = continuantDenPrev (simplePartialQuotient α) n +
+              t * continuantDen (simplePartialQuotient α) n := by
+  let a : ℕ → ℕ := simplePartialQuotient α
+
+  have hcf : IsSimpleCFExpansion α a := by
+    simpa [a] using simplePartialQuotient_isSimpleCFExpansion hαpos hαirr
+
+  have hbest : NoSmallDenominatorBetween α P Q :=
+    convergent_or_semiconvergent_no_small_denominator
+      hαpos hαirr hcf_any hred
+
+  rcases canonicalFiniteCF_exists hred hQ2 with ⟨e⟩
+
+  rcases CanonicalFiniteCF.head_ne_or_agreesThrough_or_firstDifference e a with
+    hhead | hagree | hdiff
+  · rcases smaller_denominator_between_of_head_ne hcf e hQ2 hhead with
+      ⟨c, d, hdpos, hdlt, hbetween⟩
+    exact False.elim ((hbest c d hdpos hdlt) hbetween)
+
+  · simpa [a] using CFPathPair_of_agreesThrough hcf hred e hagree
+
+  · rcases hdiff with ⟨j, hdiffj⟩
+    rcases hdiffj with ⟨hj1, hjle, hprefix, hne⟩
+    have hdiffj' : e.FirstDifference a j :=
+      ⟨hj1, hjle, hprefix, hne⟩
+
+    rcases lt_or_gt_of_ne hne with hb_lt_ha | ha_lt_hb
+    · by_cases hjlast : j = e.last
+      · simpa [a] using CFPathPair_of_firstDifference_last_lt
+          hcf hred e hdiffj' hjlast hb_lt_ha
+      · have hjlt : j < e.last := lt_of_le_of_ne hjle hjlast
+        rcases smaller_denominator_between_of_firstDifference_nonterminal_lt
+            hcf hred e hdiffj' hjlt hb_lt_ha with
+          ⟨c, d, hdpos, hdlt, hbetween⟩
+        exact False.elim ((hbest c d hdpos hdlt) hbetween)
+
+    · by_cases hjlast : j = e.last
+      · by_cases hsucc : e.coeff j = a j + 1
+        · simpa [a] using CFPathPair_of_firstDifference_last_succ
+            hcf hred e hdiffj' hjlast hsucc
+        · have hlarge : a j + 1 < e.coeff j := by
+            omega
+          rcases smaller_denominator_between_of_firstDifference_last_large
+              hcf hred e hdiffj' hjlast hlarge with
+            ⟨c, d, hdpos, hdlt, hbetween⟩
+          exact False.elim ((hbest c d hdpos hdlt) hbetween)
+      · have hjlt : j < e.last := lt_of_le_of_ne hjle hjlast
+        rcases smaller_denominator_between_of_firstDifference_nonterminal_gt
+            hcf hred e hdiffj' hjlt ha_lt_hb with
+          ⟨c, d, hdpos, hdlt, hbetween⟩
+        exact False.elim ((hbest c d hdpos hdlt) hbetween)
+
+/-- The canonical coefficient sequence recovers the numerator-denominator pair
+for any parity-selected principal/intermediate denominator witness. -/
+theorem oddCFDenoms_subset_canonical_pair_path
+    {α : ℝ}
+    (hαpos : 0 < α)
+    (hαirr : IsIrrational α)
+    {P Q : ℕ}
+    (hQ :
+      ∃ P0 : ℕ,
+        P0 = P ∧
+          2 ≤ Q ∧ ReducedFraction P0 Q ∧
+          IsConvergentOrSemiconvergent α P0 Q ∧ Odd P0) :
+    ∃ n t : ℕ,
+      1 ≤ t ∧ t ≤ simplePartialQuotient α (n + 1) ∧
+        P = continuantNumPrev (simplePartialQuotient α) n +
+              t * continuantNum (simplePartialQuotient α) n ∧
+        Q = continuantDenPrev (simplePartialQuotient α) n +
+              t * continuantDen (simplePartialQuotient α) n := by
+  rcases hQ with ⟨P0, hP0, hQ2, hred, hcf_any, hodd⟩
+  subst P0
+  exact canonical_pair_path_of_convergent_or_semiconvergent
+    hαpos hαirr hQ2 hred hcf_any
+
+/-- The canonical coefficient sequence exhausts all principal/intermediate
+denominators for `α`.
+
+This turns the existential definition of `IsConvergentOrSemiconvergent`
+into membership in the canonical denominator path. -/
+theorem oddCFDenoms_subset_canonical_path
+    {α : ℝ}
+    (hαpos : 0 < α)
+    (hαirr : IsIrrational α)
+    {Q : ℕ}
+    (hQ : Q ∈ oddCFDenoms α) :
+    CFDenominatorPath (simplePartialQuotient α) Q := by
+  rcases hQ with ⟨p, hQ2, hred, hcf_any, hodd⟩
+
+  let a : ℕ → ℕ := simplePartialQuotient α
+
+  have hcf : IsSimpleCFExpansion α a := by
+    simpa [a] using simplePartialQuotient_isSimpleCFExpansion hαpos hαirr
+
+  have hbest : NoSmallDenominatorBetween α p Q :=
+    convergent_or_semiconvergent_no_small_denominator
+      hαpos hαirr hcf_any hred
+
+  rcases canonicalFiniteCF_exists hred hQ2 with ⟨e⟩
+
+  rcases CanonicalFiniteCF.head_ne_or_agreesThrough_or_firstDifference e a with
+    hhead | hagree | hdiff
+  · rcases smaller_denominator_between_of_head_ne hcf e hQ2 hhead with
+      ⟨c, d, hdpos, hdlt, hbetween⟩
+    exact False.elim ((hbest c d hdpos hdlt) hbetween)
+
+  · exact CFDenominatorPath_of_agreesThrough hcf hred e hagree
+
+  · rcases hdiff with ⟨j, hdiffj⟩
+    rcases hdiffj with ⟨hj1, hjle, hprefix, hne⟩
+    have hdiffj' : e.FirstDifference a j :=
+      ⟨hj1, hjle, hprefix, hne⟩
+
+    rcases lt_or_gt_of_ne hne with hb_lt_ha | ha_lt_hb
+    · by_cases hjlast : j = e.last
+      · exact CFDenominatorPath_of_firstDifference_last_lt
+          hcf hred e hdiffj' hjlast hb_lt_ha
+      · have hjlt : j < e.last := lt_of_le_of_ne hjle hjlast
+        rcases smaller_denominator_between_of_firstDifference_nonterminal_lt
+            hcf hred e hdiffj' hjlt hb_lt_ha with
+          ⟨c, d, hdpos, hdlt, hbetween⟩
+        exact False.elim ((hbest c d hdpos hdlt) hbetween)
+
+    · by_cases hjlast : j = e.last
+      · by_cases hsucc : e.coeff j = a j + 1
+        · exact CFDenominatorPath_of_firstDifference_last_succ
+            hcf hred e hdiffj' hjlast hsucc
+        · have hlarge : a j + 1 < e.coeff j := by
+            omega
+          rcases smaller_denominator_between_of_firstDifference_last_large
+              hcf hred e hdiffj' hjlast hlarge with
+            ⟨c, d, hdpos, hdlt, hbetween⟩
+          exact False.elim ((hbest c d hdpos hdlt) hbetween)
+      · have hjlt : j < e.last := lt_of_le_of_ne hjle hjlast
+        rcases smaller_denominator_between_of_firstDifference_nonterminal_gt
+            hcf hred e hdiffj' hjlt ha_lt_hb with
+          ⟨c, d, hdpos, hdlt, hbetween⟩
+        exact False.elim ((hbest c d hdpos hdlt) hbetween)
+
+/-- Gap exclusion for the canonical principal/intermediate denominator path.
+
+If a natural number lies strictly between two consecutive path denominators,
+then it cannot be in `oddCFDenoms`. -/
+theorem not_mem_oddCFDenoms_of_between_consecutive_canonical_denoms
+    {α : ℝ}
+    (hαpos : 0 < α)
+    (hαirr : IsIrrational α)
+    {Q₁ Q Q₂ : ℕ}
+    (hQ₁path : CFDenominatorPath (simplePartialQuotient α) Q₁)
+    (hQ₂path : CFDenominatorPath (simplePartialQuotient α) Q₂)
+    (hconsec :
+      ∀ R : ℕ,
+        CFDenominatorPath (simplePartialQuotient α) R →
+        Q₁ < R → R < Q₂ → False)
+    (hgap : Q₁ < Q ∧ Q < Q₂) :
+    Q ∉ oddCFDenoms α := by
+  have _ := hQ₁path
+  have _ := hQ₂path
+  intro hQmem
+  have hQpath :
+      CFDenominatorPath (simplePartialQuotient α) Q :=
+    oddCFDenoms_subset_canonical_path hαpos hαirr hQmem
+  exact hconsec Q hQpath hgap.1 hgap.2
+
+/-- If every canonical path representation of `Q` has even numerator, then
+`Q` is not in the parity-selected denominator set. -/
+private theorem not_mem_oddCFDenoms_of_all_path_reprs_even
+    {α : ℝ}
+    (hαpos : 0 < α)
+    (hαirr : IsIrrational α)
+    {Q : ℕ}
+    (heven :
+      ∀ P : ℕ,
+        (∃ n t : ℕ,
+          1 ≤ t ∧ t ≤ simplePartialQuotient α (n + 1) ∧
+            P = continuantNumPrev (simplePartialQuotient α) n +
+                t * continuantNum (simplePartialQuotient α) n ∧
+            Q = continuantDenPrev (simplePartialQuotient α) n +
+                t * continuantDen (simplePartialQuotient α) n) →
+          Even P) :
+    Q ∉ oddCFDenoms α := by
+  intro hQ
+  rcases hQ with ⟨P, hQ2, hred, hcf_any, hodd⟩
+  have hpair :
+      ∃ n t : ℕ,
+        1 ≤ t ∧ t ≤ simplePartialQuotient α (n + 1) ∧
+          P = continuantNumPrev (simplePartialQuotient α) n +
+              t * continuantNum (simplePartialQuotient α) n ∧
+          Q = continuantDenPrev (simplePartialQuotient α) n +
+              t * continuantDen (simplePartialQuotient α) n :=
+    oddCFDenoms_subset_canonical_pair_path hαpos hαirr
+      ⟨P, rfl, hQ2, hred, hcf_any, hodd⟩
+  exact (Nat.not_even_iff_odd.mpr hodd) (heven P hpair)
+
+private theorem simplePartialQuotient_zero_eq_one_of_mem_Icc
+    {α : ℝ} (hαirr : IsIrrational α)
+    (hαI : α ∈ Set.Icc (1 : ℝ) 2) :
+    simplePartialQuotient α 0 = 1 := by
+  have hαge1 : (1 : ℝ) ≤ α := hαI.1
+  have hαlt2 : α < 2 := by
+    refine lt_of_le_of_ne hαI.2 ?_
+    intro hα2
+    exact hαirr ⟨2, by norm_num [hα2]⟩
+  unfold simplePartialQuotient completeQuotient
+  have hfloor : Int.floor α = 1 := by
+    rw [Int.floor_eq_iff]
+    norm_num
+    constructor <;> linarith
+  simp [hfloor]
+
+private theorem pathPair_reduced
+    (a : ℕ → ℕ) {n t : ℕ} (ht : 1 ≤ t) :
+    ReducedFraction
+      (continuantNumPrev a n + t * continuantNum a n)
+      (continuantDenPrev a n + t * continuantDen a n) := by
+  have hcop :
+      Nat.Coprime
+        (t * continuantNum a n + 1 * continuantNumPrev a n)
+        (t * continuantDen a n + 1 * continuantDenPrev a n) :=
+    commonPrefix_reduced a n (u := t) (v := 1)
+      (Nat.coprime_one_right t)
+  have hdenR :
+      (0 : ℝ) <
+        (t : ℝ) * (continuantDen a n : ℝ) +
+          (continuantDenPrev a n : ℝ) :=
+    continuant_denominator_pos a n (by exact_mod_cast ht)
+  have hden :
+      0 <
+        continuantDenPrev a n + t * continuantDen a n := by
+    have hdenR' :
+        (0 : ℝ) <
+          ((continuantDenPrev a n + t * continuantDen a n : ℕ) : ℝ) := by
+      simpa [Nat.cast_add, Nat.cast_mul, add_comm, mul_comm] using hdenR
+    exact_mod_cast hdenR'
+  refine ⟨hden, ?_⟩
+  simpa [add_comm, mul_comm, one_mul] using hcop
+
+private theorem mem_oddCFDenoms_of_canonical_path_odd
+    {α : ℝ} {a : ℕ → ℕ}
+    (hcf : IsSimpleCFExpansion α a)
+    {n t : ℕ}
+    (ht1 : 1 ≤ t)
+    (htle : t ≤ a (n + 1))
+    (hodd :
+      Odd (continuantNumPrev a n + t * continuantNum a n))
+    (hQ2 :
+      2 ≤ continuantDenPrev a n + t * continuantDen a n) :
+    continuantDenPrev a n + t * continuantDen a n ∈ oddCFDenoms α := by
+  refine oddCFDenoms_mem_of_oddCFPathPair
+    (α := α) (a := a)
+    (P := continuantNumPrev a n + t * continuantNum a n)
+    (Q := continuantDenPrev a n + t * continuantDen a n)
+    hcf ?_ hQ2 ?_
+  · refine ⟨n, t, ht1, htle, rfl, rfl, hodd⟩
+  · exact pathPair_reduced a ht1
+
+private theorem continuantNum_eq_of_eq_on_prefix {a b : ℕ → ℕ} :
+    ∀ n : ℕ,
+      (∀ i : ℕ, i ≤ n → a i = b i) →
+        continuantNum a n = continuantNum b n
+  | 0, hprefix => by
+      simp [continuantNum, hprefix 0 le_rfl]
+  | 1, hprefix => by
+      simp [continuantNum, hprefix 0 (by omega), hprefix 1 le_rfl]
+  | n + 2, hprefix => by
+      rw [continuantNum, continuantNum]
+      rw [hprefix (n + 2) le_rfl]
+      rw [continuantNum_eq_of_eq_on_prefix (n + 1)
+        (by
+          intro i hi
+          exact hprefix i (by omega))]
+      rw [continuantNum_eq_of_eq_on_prefix n
+        (by
+          intro i hi
+          exact hprefix i (by omega))]
+
+private theorem continuantDen_eq_of_eq_on_prefix {a b : ℕ → ℕ} :
+    ∀ n : ℕ,
+      (∀ i : ℕ, i ≤ n → a i = b i) →
+        continuantDen a n = continuantDen b n
+  | 0, _ => by
+      simp [continuantDen]
+  | 1, hprefix => by
+      simp [continuantDen, hprefix 1 le_rfl]
+  | n + 2, hprefix => by
+      rw [continuantDen, continuantDen]
+      rw [hprefix (n + 2) le_rfl]
+      rw [continuantDen_eq_of_eq_on_prefix (n + 1)
+        (by
+          intro i hi
+          exact hprefix i (by omega))]
+      rw [continuantDen_eq_of_eq_on_prefix n
+        (by
+          intro i hi
+          exact hprefix i (by omega))]
+
+private theorem continuantNumPrev_eq_of_eq_on_prefix {a b : ℕ → ℕ}
+    {n : ℕ}
+    (hprefix : ∀ i : ℕ, i ≤ n → a i = b i) :
+    continuantNumPrev a n = continuantNumPrev b n := by
+  cases n with
+  | zero =>
+      simp [continuantNumPrev]
+  | succ n =>
+      simp [continuantNumPrev]
+      exact continuantNum_eq_of_eq_on_prefix n
+        (by
+          intro i hi
+          exact hprefix i (by omega))
+
+private theorem continuantDenPrev_eq_of_eq_on_prefix {a b : ℕ → ℕ}
+    {n : ℕ}
+    (hprefix : ∀ i : ℕ, i ≤ n → a i = b i) :
+    continuantDenPrev a n = continuantDenPrev b n := by
+  cases n with
+  | zero =>
+      simp [continuantDenPrev]
+  | succ n =>
+      simp [continuantDenPrev]
+      exact continuantDen_eq_of_eq_on_prefix n
+        (by
+          intro i hi
+          exact hprefix i (by omega))
+
+private theorem continuantDenPrev_eq_zero_iff_of_partials
+    (a : ℕ → ℕ)
+    (hpos : ∀ k : ℕ, 0 < a (k + 1)) :
+    ∀ n : ℕ, continuantDenPrev a n = 0 ↔ n = 0
+  | 0 => by
+      simp [continuantDenPrev]
+  | n + 1 => by
+      have hdenpos : 0 < continuantDen a n :=
+        continuantDen_pos_of_partials a hpos n
+      simp [continuantDenPrev, Nat.ne_of_gt hdenpos]
+
+private theorem continuantDenPrev_lt_den_of_two_le
+    (a : ℕ → ℕ)
+    (hpos : ∀ k : ℕ, 0 < a (k + 1))
+    {n : ℕ} (hn : 2 ≤ n) :
+    continuantDenPrev a n < continuantDen a n := by
+  rcases Nat.exists_eq_add_of_le hn with ⟨k, hk⟩
+  subst n
+  rw [show 2 + k = k + 2 by omega]
+  rw [continuantDenPrev_succ, continuantDen]
+  have hcoefpos : 0 < a (k + 2) := by
+    simpa [Nat.succ_eq_add_one, Nat.add_assoc] using hpos (k + 1)
+  have hdenpos : 0 < continuantDen a k :=
+    continuantDen_pos_of_partials a hpos k
+  have hmul_ge :
+      continuantDen a (k + 1) ≤
+        a (k + 2) * continuantDen a (k + 1) :=
+    Nat.le_mul_of_pos_left (continuantDen a (k + 1)) hcoefpos
+  omega
+
+private theorem path_den_le_next_principal
+    {a : ℕ → ℕ}
+    (hpos : ∀ k : ℕ, 0 < a (k + 1))
+    {r t : ℕ}
+    (ht1 : 1 ≤ t)
+    (htle : t ≤ a (r + 1)) :
+    continuantDenPrev a r + t * continuantDen a r
+      ≤ continuantDen a (r + 1) := by
+  have _ := hpos
+  have _ := ht1
+  rw [continuantDen_succ]
+  simpa [add_comm] using
+    Nat.add_le_add_left
+      (Nat.mul_le_mul_right (continuantDen a r) htle)
+      (continuantDenPrev a r)
+
+private theorem path_den_ge_first_of_block
+    {a : ℕ → ℕ} {r t : ℕ}
+    (ht1 : 1 ≤ t) :
+    continuantDenPrev a r + continuantDen a r
+      ≤ continuantDenPrev a r + t * continuantDen a r := by
+  simpa using
+    Nat.add_le_add_left
+      (Nat.mul_le_mul_right (continuantDen a r) ht1)
+      (continuantDenPrev a r)
+
+/-- After a block with previous/current denominators `q'`, `q` and digit `A`,
+the first two later path denominators are `(A + 1) * q + q'` and
+`(2 * A + 1) * q + 2 * q'`; there is no canonical path denominator strictly
+between them. -/
+private theorem no_path_between_next1_next2
+    {a : ℕ → ℕ} {n A q q' R : ℕ}
+    (hpos : ∀ k : ℕ, 0 < a (k + 1))
+    (hA : A = a (n + 1))
+    (hq : q = continuantDen a n)
+    (hq' : q' = continuantDenPrev a n)
+    (hR : CFDenominatorPath a R)
+    (hgap :
+      (A + 1) * q + q' < R ∧
+        R < (2 * A + 1) * q + 2 * q') :
+    False := by
+  rcases hR with ⟨r, t, ht1, htle, hReq⟩
+  by_cases hr_le_n : r ≤ n
+  · have hR_le_principal :
+        R ≤ A * q + q' := by
+      rw [hReq]
+      have hle_next :
+          continuantDenPrev a r + t * continuantDen a r
+            ≤ continuantDen a (r + 1) :=
+        path_den_le_next_principal hpos ht1 htle
+      have hmono :
+          continuantDen a (r + 1) ≤ continuantDen a (n + 1) :=
+        continuantDen_mono_of_partials hpos (by omega)
+      have hprincipal :
+          continuantDen a (n + 1) = A * q + q' := by
+        rw [continuantDen_succ]
+        subst A
+        subst q
+        subst q'
+        rfl
+      omega
+    have hqpos : 0 < q := by
+      subst q
+      exact continuantDen_pos_of_partials a hpos n
+    have hstep : A * q + q' < (A + 1) * q + q' := by
+      rw [show (A + 1) * q = A * q + q by ring]
+      omega
+    omega
+  · have hn_lt_r : n < r := Nat.lt_of_not_ge hr_le_n
+    by_cases hr_eq_succ : r = n + 1
+    · subst r
+      rw [hReq] at hgap
+      have hprev :
+          continuantDenPrev a (n + 1) = q := by
+        subst q
+        exact continuantDenPrev_succ a n
+      have hden :
+          continuantDen a (n + 1) = A * q + q' := by
+        rw [continuantDen_succ]
+        subst A
+        subst q
+        subst q'
+        rfl
+      by_cases ht_eq_one : t = 1
+      · subst t
+        rw [hprev, hden] at hgap
+        have hsame : q + 1 * (A * q + q') = (A + 1) * q + q' := by
+          ring
+        omega
+      · have ht_ge_two : 2 ≤ t := by omega
+        have hlower :
+            (2 * A + 1) * q + 2 * q'
+              ≤ continuantDenPrev a (n + 1) +
+                  t * continuantDen a (n + 1) := by
+          rw [hprev, hden]
+          have hqpos : 0 < q := by
+            subst q
+            exact continuantDen_pos_of_partials a hpos n
+          have hmul :
+              2 * (A * q + q') ≤ t * (A * q + q') :=
+            Nat.mul_le_mul_right (A * q + q') ht_ge_two
+          rw [show (2 * A + 1) * q + 2 * q' =
+              q + 2 * (A * q + q') by ring]
+          exact Nat.add_le_add_left hmul q
+        omega
+    · have hsucc_lt_r : n + 1 < r := by omega
+      rw [hReq] at hgap
+      have hfirst_block :
+          (2 * A + 1) * q + 2 * q'
+            ≤ continuantDenPrev a r + t * continuantDen a r := by
+        have hbase_den :
+            continuantDen a (n + 1) = A * q + q' := by
+          rw [continuantDen_succ]
+          subst A
+          subst q
+          subst q'
+          rfl
+        have hbase_prev :
+            continuantDenPrev a (n + 1) = q := by
+          subst q
+          exact continuantDenPrev_succ a n
+        have hden_succ_ge :
+            continuantDen a (n + 2)
+              ≥ continuantDen a (n + 1) + continuantDen a n := by
+          rw [continuantDen_succ]
+          have hpos_digit : 0 < a (n + 2) := hpos (n + 1)
+          have hqpos : 0 < continuantDen a (n + 1) :=
+            continuantDen_pos_of_partials a hpos (n + 1)
+          nlinarith [Nat.succ_le_iff.mp hpos_digit]
+        have hden_r_ge :
+            continuantDen a r ≥ continuantDen a (n + 2) :=
+          continuantDen_mono_of_partials hpos (by omega)
+        have hprev_r_ge :
+            continuantDenPrev a r ≥ continuantDen a (n + 1) := by
+          cases r with
+          | zero => omega
+          | succ r' =>
+              have hr'ge : n + 1 ≤ r' := by omega
+              rw [continuantDenPrev_succ]
+              exact continuantDen_mono_of_partials hpos hr'ge
+        have hpath_ge :
+            continuantDenPrev a r + continuantDen a r
+              ≤ continuantDenPrev a r + t * continuantDen a r :=
+          path_den_ge_first_of_block ht1
+        have htarget :
+            (2 * A + 1) * q + 2 * q'
+              ≤ continuantDenPrev a r + continuantDen a r := by
+          have htarget_base :
+              (2 * A + 1) * q + 2 * q'
+                ≤ continuantDen a (n + 1) + continuantDen a (n + 2) := by
+            rw [hbase_den]
+            subst q
+            subst q'
+            subst A
+            nlinarith
+          nlinarith
+        exact le_trans htarget hpath_ge
+      omega
+
+/-- In one fixed block, there is no path denominator strictly between two
+adjacent current-block denominators. -/
+private theorem no_path_between_same_block_adjacent
+    {a : ℕ → ℕ} {n m R : ℕ}
+    (hpos : ∀ k : ℕ, 0 < a (k + 1))
+    (hm1 : 1 ≤ m)
+    (hmnext : m + 1 ≤ a (n + 1))
+    (hR : CFDenominatorPath a R)
+    (hgap :
+      continuantDenPrev a n + m * continuantDen a n < R ∧
+        R < continuantDenPrev a n + (m + 1) * continuantDen a n) :
+    False := by
+  rcases hR with ⟨r, t, ht1, htle, hReq⟩
+  by_cases hr_lt : r < n
+  · have hR_le_prev :
+        R ≤ continuantDen a n := by
+      rw [hReq]
+      have hle_next :
+          continuantDenPrev a r + t * continuantDen a r
+            ≤ continuantDen a (r + 1) :=
+        path_den_le_next_principal hpos ht1 htle
+      have hmono :
+          continuantDen a (r + 1) ≤ continuantDen a n :=
+        continuantDen_mono_of_partials hpos (by omega)
+      exact le_trans hle_next hmono
+    have hleft_ge :
+        continuantDen a n
+          ≤ continuantDenPrev a n + m * continuantDen a n := by
+      have hmul :
+          continuantDen a n ≤ m * continuantDen a n :=
+        Nat.le_mul_of_pos_left (continuantDen a n) hm1
+      omega
+    omega
+  · by_cases hr_eq : r = n
+    · subst r
+      rw [hReq] at hgap
+      have ht_le_m_or_ge : t ≤ m ∨ m + 1 ≤ t := by omega
+      rcases ht_le_m_or_ge with htm | hmt
+      · have hle :
+            continuantDenPrev a n + t * continuantDen a n
+              ≤ continuantDenPrev a n + m * continuantDen a n :=
+          Nat.add_le_add_left
+            (Nat.mul_le_mul_right (continuantDen a n) htm)
+            _
+        omega
+      · have hge :
+            continuantDenPrev a n + (m + 1) * continuantDen a n
+              ≤ continuantDenPrev a n + t * continuantDen a n :=
+          Nat.add_le_add_left
+            (Nat.mul_le_mul_right (continuantDen a n) hmt)
+            _
+        omega
+    · have hn_lt_r : n < r := by omega
+      rw [hReq] at hgap
+      have hR_ge_next :
+          continuantDen a (n + 1)
+            ≤ continuantDenPrev a r + t * continuantDen a r := by
+        have hden_next_le_r :
+            continuantDen a (n + 1) ≤ continuantDen a r :=
+          continuantDen_mono_of_partials hpos (by omega)
+        have hden_r_le_path :
+            continuantDen a r ≤
+              continuantDenPrev a r + t * continuantDen a r := by
+          have hmul :
+              continuantDen a r ≤ t * continuantDen a r :=
+            Nat.le_mul_of_pos_left (continuantDen a r) ht1
+          omega
+        exact le_trans hden_next_le_r hden_r_le_path
+      have hright_le_next :
+          continuantDenPrev a n + (m + 1) * continuantDen a n
+            ≤ continuantDen a (n + 1) := by
+        rw [continuantDen_succ]
+        simpa [add_comm] using
+          Nat.add_le_add_left
+            (Nat.mul_le_mul_right (continuantDen a n) hmnext)
+            (continuantDenPrev a n)
+      omega
+
+/-- There is no path denominator strictly between a principal denominator
+`A*q+q'` and the first denominator in the next local block `(A+1)*q+q'`. -/
+private theorem no_path_between_principal_and_next1
+    {a : ℕ → ℕ} {n A q q' R : ℕ}
+    (hpos : ∀ k : ℕ, 0 < a (k + 1))
+    (hA : A = a (n + 1))
+    (hq : q = continuantDen a n)
+    (hq' : q' = continuantDenPrev a n)
+    (hR : CFDenominatorPath a R)
+    (hgap : A * q + q' < R ∧ R < (A + 1) * q + q') :
+    False := by
+  rcases hR with ⟨r, t, ht1, htle, hReq⟩
+  by_cases hr_le_n : r ≤ n
+  · have hR_le :
+        R ≤ A * q + q' := by
+      rw [hReq]
+      have hle_next :
+          continuantDenPrev a r + t * continuantDen a r
+            ≤ continuantDen a (r + 1) :=
+        path_den_le_next_principal hpos ht1 htle
+      have hmono :
+          continuantDen a (r + 1) ≤ continuantDen a (n + 1) :=
+        continuantDen_mono_of_partials hpos (by omega)
+      have hprincipal :
+          continuantDen a (n + 1) = A * q + q' := by
+        rw [continuantDen_succ]
+        subst A
+        subst q
+        subst q'
+        rfl
+      omega
+    omega
+  · have hn_lt_r : n < r := Nat.lt_of_not_ge hr_le_n
+    by_cases hr_eq_succ : r = n + 1
+    · subst r
+      rw [hReq] at hgap
+      have hprev :
+          continuantDenPrev a (n + 1) = q := by
+        subst q
+        exact continuantDenPrev_succ a n
+      have hden :
+          continuantDen a (n + 1) = A * q + q' := by
+        rw [continuantDen_succ]
+        subst A
+        subst q
+        subst q'
+        rfl
+      have ht_cases : t = 1 ∨ 2 ≤ t := by omega
+      rcases ht_cases with ht | ht
+      · subst t
+        rw [hprev, hden] at hgap
+        have hsame : q + 1 * (A * q + q') = (A + 1) * q + q' := by
+          ring
+        omega
+      · rw [hprev, hden] at hgap
+        have hqpos : 0 < q := by
+          subst q
+          exact continuantDen_pos_of_partials a hpos n
+        have htwomul :
+            2 * (A * q + q') ≤ t * (A * q + q') :=
+          Nat.mul_le_mul_right (A * q + q') ht
+        have htarget :
+            (A + 1) * q + q' ≤ q + 2 * (A * q + q') := by
+          nlinarith
+        have hlower :
+            (A + 1) * q + q' ≤ q + t * (A * q + q') := by
+          exact le_trans htarget (Nat.add_le_add_left htwomul q)
+        omega
+    · have hsucc_lt_r : n + 1 < r := by omega
+      rw [hReq] at hgap
+      have hge_next1 :
+          (A + 1) * q + q'
+            ≤ continuantDenPrev a r + t * continuantDen a r := by
+        have hbase_den :
+            continuantDen a (n + 1) = A * q + q' := by
+          rw [continuantDen_succ]
+          subst A
+          subst q
+          subst q'
+          rfl
+        have hprev_r_ge :
+            continuantDenPrev a r ≥ continuantDen a (n + 1) := by
+          cases r with
+          | zero => omega
+          | succ r' =>
+              have hr'ge : n + 1 ≤ r' := by omega
+              rw [continuantDenPrev_succ]
+              exact continuantDen_mono_of_partials hpos hr'ge
+        have hpath_ge :
+            continuantDenPrev a r + continuantDen a r
+              ≤ continuantDenPrev a r + t * continuantDen a r :=
+          path_den_ge_first_of_block ht1
+        have hden_r_ge_q :
+            q ≤ continuantDen a r := by
+          subst q
+          exact continuantDen_mono_of_partials hpos (by omega)
+        have htarget_eq :
+            (A + 1) * q + q' = (A * q + q') + q := by
+          ring
+        rw [htarget_eq]
+        have hbase_le_prev :
+            A * q + q' ≤ continuantDenPrev a r := by
+          rw [← hbase_den]
+          exact hprev_r_ge
+        exact le_trans (Nat.add_le_add hbase_le_prev hden_r_ge_q) hpath_ge
+      omega
+
+/-- Ordered first-deviation case for the parity-filtered continued-fraction
+denominator set. This is the local two-denominator argument: the first
+different canonical partial quotient of `x` is strictly smaller than that of
+`y`. -/
+private theorem oddCFDenoms_ne_of_firstDiff_lt
+    {x y : ℝ}
+    (hxirr : IsIrrational x) (hyirr : IsIrrational y)
+    (hxI : x ∈ Set.Icc (1 : ℝ) 2)
+    (hyI : y ∈ Set.Icc (1 : ℝ) 2)
+    {j : ℕ}
+    (hprefix : ∀ i : ℕ, i < j →
+      simplePartialQuotient x i = simplePartialQuotient y i)
+    (hlt :
+      simplePartialQuotient x j < simplePartialQuotient y j) :
+    oddCFDenoms x ≠ oddCFDenoms y := by
+  have hx0 : simplePartialQuotient x 0 = 1 :=
+    simplePartialQuotient_zero_eq_one_of_mem_Icc hxirr hxI
+  have hy0 : simplePartialQuotient y 0 = 1 :=
+    simplePartialQuotient_zero_eq_one_of_mem_Icc hyirr hyI
+  have hjpos : 0 < j := by
+    by_contra hj0
+    have hj : j = 0 := Nat.eq_zero_of_not_pos hj0
+    subst j
+    rw [hx0, hy0] at hlt
+    omega
+  let n : ℕ := j - 1
+  have hn1 : n + 1 = j := by
+    dsimp [n]
+    omega
+  let ax : ℕ → ℕ := simplePartialQuotient x
+  let ay : ℕ → ℕ := simplePartialQuotient y
+  let a : ℕ := ax j
+  let b : ℕ := ay j
+  let p : ℕ := continuantNum ax n
+  let p' : ℕ := continuantNumPrev ax n
+  let q : ℕ := continuantDen ax n
+  let q' : ℕ := continuantDenPrev ax n
+  let X₁ : ℕ := (a + 1) * q + q'
+  let Y : ℕ := (a + 2) * q + q'
+  let X₂ : ℕ := (2 * a + 1) * q + 2 * q'
+  let PY : ℕ := (a + 2) * p + p'
+  let PX₂ : ℕ := (2 * a + 1) * p + 2 * p'
+  have hab : a < b := by
+    dsimp [a, b, ax, ay]
+    simpa using hlt
+  have hxpos : 0 < x := lt_of_lt_of_le (by norm_num) hxI.1
+  have hypos : 0 < y := lt_of_lt_of_le (by norm_num) hyI.1
+  have hxcf : IsSimpleCFExpansion x ax := by
+    simpa [ax] using simplePartialQuotient_isSimpleCFExpansion hxpos hxirr
+  have hycf : IsSimpleCFExpansion y ay := by
+    simpa [ay] using simplePartialQuotient_isSimpleCFExpansion hypos hyirr
+  have hprefix_to_n : ∀ i : ℕ, i ≤ n → ax i = ay i := by
+    intro i hi
+    dsimp [ax, ay]
+    exact hprefix i (by omega)
+  have hnum_eq : continuantNum ax n = continuantNum ay n :=
+    continuantNum_eq_of_eq_on_prefix n hprefix_to_n
+  have hden_eq : continuantDen ax n = continuantDen ay n :=
+    continuantDen_eq_of_eq_on_prefix n hprefix_to_n
+  have hnumPrev_eq : continuantNumPrev ax n = continuantNumPrev ay n :=
+    continuantNumPrev_eq_of_eq_on_prefix hprefix_to_n
+  have hdenPrev_eq : continuantDenPrev ax n = continuantDenPrev ay n :=
+    continuantDenPrev_eq_of_eq_on_prefix hprefix_to_n
+  by_cases hPYodd : Odd PY
+  · have hb_ge_or_eq : a + 2 ≤ b ∨ b = a + 1 := by omega
+    have hY_mem_y : Y ∈ oddCFDenoms y := by
+      rcases hb_ge_or_eq with hbge | hbeq
+      · have hYeq :
+            Y = continuantDenPrev ay n + (a + 2) * continuantDen ay n := by
+          dsimp [Y, q, q']
+          rw [← hdenPrev_eq, ← hden_eq]
+          ring
+        rw [hYeq]
+        refine mem_oddCFDenoms_of_canonical_path_odd
+          (α := y) (a := ay) hycf
+          (n := n) (t := a + 2)
+          ?_ ?_ ?_ ?_
+        · omega
+        · rw [hn1]
+          dsimp [b] at hbge
+          exact hbge
+        · have hnumexpr :
+              continuantNumPrev ay n + (a + 2) * continuantNum ay n = PY := by
+            dsimp [PY, p, p']
+            rw [← hnumPrev_eq, ← hnum_eq]
+            ring
+          rw [hnumexpr]
+          exact hPYodd
+        · have hdenpos : 0 < continuantDen ay n :=
+            continuantDen_pos_of_partials ay hycf.1 n
+          have hmul : 2 ≤ (a + 2) * continuantDen ay n := by
+            nlinarith
+          omega
+      · have hdenPrev_j : continuantDenPrev ay j = q := by
+          rw [← hn1]
+          dsimp [q]
+          rw [continuantDenPrev_succ]
+          exact hden_eq.symm
+        have hden_j : continuantDen ay j = b * q + q' := by
+          rw [← hn1]
+          rw [continuantDen_succ]
+          dsimp [b, q, q']
+          rw [← hn1]
+          rw [← hden_eq, ← hdenPrev_eq]
+        have hYeq :
+            Y = continuantDenPrev ay j + 1 * continuantDen ay j := by
+          rw [hdenPrev_j, hden_j, hbeq]
+          dsimp [Y]
+          ring
+        rw [hYeq]
+        refine mem_oddCFDenoms_of_canonical_path_odd
+          (α := y) (a := ay) hycf
+          (n := j) (t := 1)
+          (by norm_num) ?_ ?_ ?_
+        · exact Nat.succ_le_iff.mpr (hycf.1 j)
+        · have hnumPrev_j : continuantNumPrev ay j = p := by
+            rw [← hn1]
+            dsimp [p]
+            rw [continuantNumPrev_succ]
+            exact hnum_eq.symm
+          have hnum_j : continuantNum ay j = b * p + p' := by
+            rw [← hn1]
+            rw [continuantNum_succ]
+            dsimp [b, p, p']
+            rw [← hn1]
+            rw [← hnum_eq, ← hnumPrev_eq]
+          have hnumexpr :
+              continuantNumPrev ay j + 1 * continuantNum ay j = PY := by
+            rw [hnumPrev_j, hnum_j, hbeq]
+            dsimp [PY]
+            ring
+          rw [hnumexpr]
+          exact hPYodd
+        · have hqpos : 0 < q := by
+            dsimp [q]
+            exact continuantDen_pos_of_partials ax hxcf.1 n
+          have hprevpos : 0 < continuantDenPrev ay j := by
+            rw [hdenPrev_j]
+            exact hqpos
+          have hdenpos : 0 < continuantDen ay j :=
+            continuantDen_pos_of_partials ay hycf.1 j
+          omega
+    have hY_not_x : Y ∉ oddCFDenoms x := by
+      refine not_mem_oddCFDenoms_of_between_consecutive_canonical_denoms
+        (Q₁ := X₁) (Q := Y) (Q₂ := X₂)
+        hxpos hxirr ?hX1path ?hX2path ?hconsec ?hgap
+      · refine ⟨j, 1, by norm_num, ?_, ?_⟩
+        · exact Nat.succ_le_iff.mpr (hxcf.1 j)
+        · dsimp [X₁, a, q, q']
+          rw [← hn1]
+          rw [continuantDenPrev_succ, continuantDen_succ]
+          ring
+      · by_cases hnext2 : 2 ≤ ax (j + 1)
+        · refine ⟨j, 2, by norm_num, hnext2, ?_⟩
+          dsimp [X₂, a, q, q']
+          rw [← hn1]
+          rw [continuantDenPrev_succ, continuantDen_succ]
+          ring
+        · have hnext1 : ax (j + 1) = 1 := by
+            have hposnext : 0 < ax (j + 1) := hxcf.1 j
+            omega
+          refine ⟨j + 1, 1, by norm_num, ?_, ?_⟩
+          · exact Nat.succ_le_iff.mpr (hxcf.1 (j + 1))
+          · have hprev_j : continuantDenPrev ax j = q := by
+              rw [← hn1]
+              dsimp [q]
+              rw [continuantDenPrev_succ]
+            have hden_j : continuantDen ax j = a * q + q' := by
+              rw [← hn1]
+              rw [continuantDen_succ]
+              dsimp [a, q, q']
+              rw [hn1]
+            have hprev_j1 : continuantDenPrev ax (j + 1) = continuantDen ax j := by
+              rw [continuantDenPrev_succ]
+            have hden_j1 :
+                continuantDen ax (j + 1) =
+                  continuantDen ax j + continuantDenPrev ax j := by
+              rw [continuantDen_succ, hnext1]
+              ring
+            rw [hprev_j1, hden_j1, hden_j, hprev_j]
+            dsimp [X₂]
+            ring
+      · intro R hR hRX1 hRX2
+        exact no_path_between_next1_next2
+          (a := ax) (n := n) (A := a) (q := q) (q' := q')
+          hxcf.1 (by dsimp [a]; rw [hn1]) rfl rfl hR ⟨hRX1, hRX2⟩
+      · have hqpos : 0 < q := by
+          dsimp [q]
+          exact continuantDen_pos_of_partials ax hxcf.1 n
+        have hstrict : Y < X₂ := by
+          by_cases hex : a = 1 ∧ q' = 0
+          · rcases hex with ⟨ha1, hq0⟩
+            exfalso
+            have hn0 : n = 0 := by
+              exact (continuantDenPrev_eq_zero_iff_of_partials ax hxcf.1 n).mp
+                (by simpa [q'] using hq0)
+            have hp : p = 1 := by
+              dsimp [p, ax]
+              rw [hn0]
+              simpa [continuantNum] using hx0
+            have hp' : p' = 1 := by
+              dsimp [p']
+              rw [hn0]
+              simp [continuantNumPrev]
+            have hpy : PY = 4 := by
+              dsimp [PY]
+              rw [ha1, hp, hp']
+            rw [hpy] at hPYodd
+            norm_num at hPYodd
+          · dsimp [Y, X₂]
+            by_cases ha1 : a = 1
+            · have hq'pos : 0 < q' := by
+                by_contra hq'not
+                have hq'0 : q' = 0 := Nat.eq_zero_of_not_pos hq'not
+                exact hex ⟨ha1, hq'0⟩
+              rw [ha1]
+              norm_num
+              omega
+            · have hapos : 0 < a := by
+                dsimp [a]
+                rw [← hn1]
+                exact hxcf.1 n
+              have ha2 : 2 ≤ a := by omega
+              have hmul_lt : (a + 2) * q < (2 * a + 1) * q := by
+                have hcoef_lt : a + 2 < 2 * a + 1 := by omega
+                exact Nat.mul_lt_mul_of_pos_right hcoef_lt hqpos
+              omega
+        constructor
+        · dsimp [X₁, Y]
+          rw [show (a + 2) * q = (a + 1) * q + q by ring]
+          omega
+        · exact hstrict
+    intro hsets
+    exact hY_not_x (by simpa [hsets] using hY_mem_y)
+  · -- Even `PY` case: prove `X₂ ∈ oddCFDenoms x` and `X₂ ∉ oddCFDenoms y`.
+    have hPYeven : Even PY := Nat.not_odd_iff_even.mp hPYodd
+    have hpodd : Odd p := by
+      by_contra hpnot
+      have hpeven : Even p := Nat.not_odd_iff_even.mp hpnot
+      have hcop : Nat.Coprime p p' := by
+        dsimp [p, p']
+        exact continuantNum_coprime_prev ax n
+      have hp'not_even : ¬ Even p' := by
+        intro hp'even
+        have hbad : ¬ Nat.Coprime p p' :=
+          Nat.not_coprime_of_dvd_of_dvd
+            (d := 2) (by norm_num)
+            (even_iff_two_dvd.mp hpeven)
+            (even_iff_two_dvd.mp hp'even)
+        exact hbad hcop
+      have hp'odd : Odd p' := Nat.not_even_iff_odd.mp hp'not_even
+      have hterm_even : Even ((a + 2) * p) :=
+        Even.mul_left hpeven (a + 2)
+      have hpy_odd : Odd PY := by
+        dsimp [PY]
+        exact hterm_even.add_odd hp'odd
+      exact hPYodd hpy_odd
+    have hPX₂odd : Odd PX₂ := by
+      have hcoefodd : Odd (2 * a + 1) := ⟨a, rfl⟩
+      have hmainodd : Odd ((2 * a + 1) * p) :=
+        hcoefodd.mul hpodd
+      have htail_even : Even (2 * p') := even_two_mul p'
+      dsimp [PX₂]
+      exact hmainodd.add_even htail_even
+    have hX₂_mem_x : X₂ ∈ oddCFDenoms x := by
+      by_cases hnext2 : 2 ≤ ax (j + 1)
+      · have hX₂eq :
+            X₂ = continuantDenPrev ax j + 2 * continuantDen ax j := by
+          dsimp [X₂, a, q, q']
+          rw [← hn1]
+          rw [continuantDenPrev_succ, continuantDen_succ]
+          ring
+        rw [hX₂eq]
+        refine mem_oddCFDenoms_of_canonical_path_odd
+          (α := x) (a := ax) hxcf
+          (n := j) (t := 2)
+          (by norm_num) hnext2 ?_ ?_
+        · have hnumPrev_j : continuantNumPrev ax j = p := by
+            rw [← hn1]
+            dsimp [p]
+            rw [continuantNumPrev_succ]
+          have hnum_j : continuantNum ax j = a * p + p' := by
+            rw [← hn1]
+            rw [continuantNum_succ]
+            dsimp [a, p, p']
+            rw [hn1]
+          have hnumexpr :
+              continuantNumPrev ax j + 2 * continuantNum ax j = PX₂ := by
+            rw [hnumPrev_j, hnum_j]
+            dsimp [PX₂]
+            ring
+          rw [hnumexpr]
+          exact hPX₂odd
+        · have hqpos : 0 < q := by
+            dsimp [q]
+            exact continuantDen_pos_of_partials ax hxcf.1 n
+          have hapos : 0 < a := by
+            dsimp [a]
+            rw [← hn1]
+            exact hxcf.1 n
+          have hcoef : 2 ≤ 2 * a + 1 := by omega
+          have hmul : 2 ≤ (2 * a + 1) * q :=
+            le_trans hcoef (Nat.le_mul_of_pos_right (2 * a + 1) hqpos)
+          rw [← hX₂eq]
+          dsimp [X₂]
+          omega
+      · have hnext1 : ax (j + 1) = 1 := by
+          have hposnext : 0 < ax (j + 1) := hxcf.1 j
+          omega
+        have hX₂eq :
+            X₂ = continuantDenPrev ax (j + 1) +
+                1 * continuantDen ax (j + 1) := by
+          have hprev_j : continuantDenPrev ax j = q := by
+            rw [← hn1]
+            dsimp [q]
+            rw [continuantDenPrev_succ]
+          have hden_j : continuantDen ax j = a * q + q' := by
+            rw [← hn1]
+            rw [continuantDen_succ]
+            dsimp [a, q, q']
+            rw [hn1]
+          have hprev_j1 : continuantDenPrev ax (j + 1) = continuantDen ax j := by
+            rw [continuantDenPrev_succ]
+          have hden_j1 :
+              continuantDen ax (j + 1) =
+                continuantDen ax j + continuantDenPrev ax j := by
+            rw [continuantDen_succ, hnext1]
+            ring
+          rw [hprev_j1, hden_j1, hden_j, hprev_j]
+          dsimp [X₂]
+          ring
+        rw [hX₂eq]
+        refine mem_oddCFDenoms_of_canonical_path_odd
+          (α := x) (a := ax) hxcf
+          (n := j + 1) (t := 1)
+          (by norm_num) ?_ ?_ ?_
+        · exact Nat.succ_le_iff.mpr (hxcf.1 (j + 1))
+        · have hnumPrev_j : continuantNumPrev ax j = p := by
+            rw [← hn1]
+            dsimp [p]
+            rw [continuantNumPrev_succ]
+          have hnum_j : continuantNum ax j = a * p + p' := by
+            rw [← hn1]
+            rw [continuantNum_succ]
+            dsimp [a, p, p']
+            rw [hn1]
+          have hnumPrev_j1 : continuantNumPrev ax (j + 1) = continuantNum ax j := by
+            rw [continuantNumPrev_succ]
+          have hnum_j1 :
+              continuantNum ax (j + 1) =
+                continuantNum ax j + continuantNumPrev ax j := by
+            rw [continuantNum_succ, hnext1]
+            ring
+          have hnumexpr :
+              continuantNumPrev ax (j + 1) +
+                  1 * continuantNum ax (j + 1) = PX₂ := by
+            rw [hnumPrev_j1, hnum_j1, hnum_j, hnumPrev_j]
+            dsimp [PX₂]
+            ring
+          rw [hnumexpr]
+          exact hPX₂odd
+        · have hqpos : 0 < q := by
+            dsimp [q]
+            exact continuantDen_pos_of_partials ax hxcf.1 n
+          have hapos : 0 < a := by
+            dsimp [a]
+            rw [← hn1]
+            exact hxcf.1 n
+          have hcoef : 2 ≤ 2 * a + 1 := by omega
+          have hmul : 2 ≤ (2 * a + 1) * q :=
+            le_trans hcoef (Nat.le_mul_of_pos_right (2 * a + 1) hqpos)
+          rw [← hX₂eq]
+          dsimp [X₂]
+          omega
+    have hX₂_all_y_reprs_even :
+        ∀ P : ℕ,
+          (∃ r t : ℕ,
+            1 ≤ t ∧ t ≤ simplePartialQuotient y (r + 1) ∧
+              P = continuantNumPrev (simplePartialQuotient y) r +
+                  t * continuantNum (simplePartialQuotient y) r ∧
+              X₂ = continuantDenPrev (simplePartialQuotient y) r +
+                  t * continuantDen (simplePartialQuotient y) r) →
+            Even P := by
+      intro P hpair
+      rcases hpair with ⟨r, t, ht1, htle, hP, hQ⟩
+      by_cases hq0 : q' = 0
+      · have hn0 : n = 0 := by
+          exact (continuantDenPrev_eq_zero_iff_of_partials ax hxcf.1 n).mp
+            (by simpa [q'] using hq0)
+        have hj1' : j = 1 := by
+          omega
+        have hp0 : p = 1 := by
+          dsimp [p]
+          rw [hn0]
+          simpa [ax, continuantNum] using hx0
+        have hp0' : p' = 1 := by
+          dsimp [p']
+          rw [hn0]
+          simp [continuantNumPrev]
+        have hq0val : q = 1 := by
+          dsimp [q]
+          rw [hn0]
+          simp [continuantDen]
+        have hX₂val : X₂ = 2 * a + 1 := by
+          dsimp [X₂]
+          rw [hq0val, hq0]
+          ring
+        cases r with
+        | zero =>
+            have ht_eq : t = 2 * a + 1 := by
+              rw [hX₂val] at hQ
+              simp [continuantDenPrev, continuantDen] at hQ
+              omega
+            rw [hP]
+            simp [continuantNumPrev, continuantNum, ht_eq, hy0]
+            exact ⟨a + 1, by omega⟩
+        | succ r' =>
+            by_cases hr0 : r' = 0
+            · subst r'
+              have hb_y : ay 1 = b := by
+                dsimp [b, ay]
+                rw [hj1']
+              have hden_block1 :
+                  continuantDenPrev ay 1 + t * continuantDen ay 1 =
+                    1 + t * b := by
+                simp [continuantDenPrev, continuantDen, hb_y]
+              have hden_eq_local : 2 * a + 1 = 1 + t * b := by
+                rw [hX₂val] at hQ
+                rw [hden_block1] at hQ
+                exact hQ
+              have ht_cases : t = 1 ∨ 2 ≤ t := by omega
+              rcases ht_cases with ht_eq_one | ht_ge_two
+              · subst t
+                have hb_eq_2a : b = 2 * a := by
+                  omega
+                rw [hP]
+                simp [continuantNumPrev, continuantNum, hb_y, hb_eq_2a, ay, hy0]
+                exact ⟨a + 1, by omega⟩
+              · have hcontr : 2 * a < t * b := by
+                  have h2a_lt_2b : 2 * a < 2 * b :=
+                    Nat.mul_lt_mul_of_pos_left hab (by norm_num)
+                  have h2b_le_tb : 2 * b ≤ t * b :=
+                    Nat.mul_le_mul_right b ht_ge_two
+                  exact lt_of_lt_of_le h2a_lt_2b h2b_le_tb
+                omega
+            · exfalso
+              have hr'pos : 0 < r' := Nat.pos_of_ne_zero hr0
+              have hden1 : continuantDen ay 1 = b := by
+                simp [continuantDen]
+                dsimp [b, ay]
+                rw [hj1']
+              have hprev_ge_b :
+                  b ≤ continuantDenPrev ay (Nat.succ r') := by
+                rw [continuantDenPrev_succ]
+                rw [← hden1]
+                exact continuantDen_mono_of_partials hycf.1 (by omega)
+              have hden_ge_b :
+                  b ≤ continuantDen ay (Nat.succ r') := by
+                rw [← hden1]
+                exact continuantDen_mono_of_partials hycf.1 (by omega)
+              have hden_le_tden :
+                  continuantDen ay (Nat.succ r') ≤
+                    t * continuantDen ay (Nat.succ r') :=
+                Nat.le_mul_of_pos_left
+                  (continuantDen ay (Nat.succ r')) ht1
+              have hpath_ge_2b :
+                  2 * b ≤
+                    continuantDenPrev ay (Nat.succ r') +
+                      t * continuantDen ay (Nat.succ r') := by
+                omega
+              have hX₂_lt_2b : X₂ < 2 * b := by
+                rw [hX₂val]
+                omega
+              rw [← hQ] at hpath_ge_2b
+              omega
+      · have hq'pos : 0 < q' := by omega
+        have hqpos : 0 < q := by
+          dsimp [q]
+          exact continuantDen_pos_of_partials ax hxcf.1 n
+        have hq'_lt_q : q' < q := by
+          by_cases hn1case : n = 1
+          · by_contra hnot
+            have hnot' : ¬ (1 < ax 1) := by
+              intro hlt1
+              apply hnot
+              dsimp [q, q']
+              rw [hn1case]
+              simpa [continuantDen, continuantDenPrev] using hlt1
+            have hax1pos : 0 < ax 1 := by
+              simpa using hxcf.1 0
+            have hax1le : ax 1 ≤ 1 := Nat.le_of_not_gt hnot'
+            have hax1 : ax 1 = 1 :=
+              le_antisymm hax1le hax1pos
+            have hax0 : ax 0 = 1 := by
+              dsimp [ax]
+              exact hx0
+            have hp_eq_two : p = 2 := by
+              dsimp [p]
+              rw [hn1case]
+              simp [continuantNum, hax0, hax1]
+            have hp'_eq_one : p' = 1 := by
+              dsimp [p']
+              rw [hn1case]
+              simp [continuantNumPrev, continuantNum, hax0]
+            have hPY_odd : Odd PY := by
+              dsimp [PY]
+              rw [hp_eq_two, hp'_eq_one]
+              exact ⟨a + 2, by omega⟩
+            exact hPYodd hPY_odd
+          · have hn0_ne : n ≠ 0 := by
+              intro hn0
+              have hq'0 : q' = 0 := by
+                dsimp [q']
+                rw [hn0]
+                simp [continuantDenPrev]
+              omega
+            have hn_ge_two : 2 ≤ n := by omega
+            dsimp [q, q']
+            exact continuantDenPrev_lt_den_of_two_le ax hxcf.1 hn_ge_two
+        have hdenpos_ay : 0 < continuantDen ay n := by
+          rw [← hden_eq]
+          exact hqpos
+        have hprev_lt_den_ay :
+            continuantDenPrev ay n < continuantDen ay n := by
+          rw [← hdenPrev_eq, ← hden_eq]
+          exact hq'_lt_q
+        have hpath : CFDenominatorPath ay X₂ := by
+          refine ⟨r, t, ht1, htle, ?_⟩
+          exact hQ
+        by_cases hb_big : 2 * a + 2 ≤ b
+        · exfalso
+          have hgap :
+              continuantDenPrev ay n + (2 * a + 1) * continuantDen ay n < X₂ ∧
+                X₂ < continuantDenPrev ay n + (2 * a + 2) * continuantDen ay n := by
+            constructor
+            · dsimp [X₂, q, q']
+              rw [hden_eq, hdenPrev_eq]
+              omega
+            · have hcoef_lt : 2 * a + 1 < 2 * a + 2 := by omega
+              have hmul_lt :
+                  (2 * a + 1) * continuantDen ay n <
+                    (2 * a + 2) * continuantDen ay n :=
+                Nat.mul_lt_mul_of_pos_right hcoef_lt hdenpos_ay
+              have hupper_nat :
+                  (2 * a + 1) * continuantDen ay n +
+                      2 * continuantDenPrev ay n <
+                    continuantDenPrev ay n +
+                      (2 * a + 2) * continuantDen ay n := by
+                have htwoprev :
+                    2 * continuantDenPrev ay n <
+                      continuantDen ay n + continuantDenPrev ay n := by
+                  omega
+                calc
+                  (2 * a + 1) * continuantDen ay n +
+                      2 * continuantDenPrev ay n
+                      < (2 * a + 1) * continuantDen ay n +
+                          (continuantDen ay n + continuantDenPrev ay n) :=
+                        Nat.add_lt_add_left htwoprev _
+                  _ = continuantDenPrev ay n +
+                        (2 * a + 2) * continuantDen ay n := by
+                        ring
+              dsimp [X₂, q, q']
+              rw [hden_eq, hdenPrev_eq]
+              exact hupper_nat
+          exact no_path_between_same_block_adjacent
+            hycf.1
+            (m := 2 * a + 1)
+            (by omega)
+            (by
+              have hb_big' : 2 * a + 2 ≤ ay (n + 1) := by
+                dsimp [b] at hb_big
+                rwa [hn1]
+              omega)
+            hpath hgap
+        · have hb_le_big : b ≤ 2 * a + 1 := by omega
+          by_cases hb_eq : b = 2 * a + 1
+          · exfalso
+            have hgap :
+                b * q + q' < X₂ ∧ X₂ < (b + 1) * q + q' := by
+              constructor
+              · dsimp [X₂]
+                rw [hb_eq]
+                omega
+              · have hcoef_lt : b < b + 1 := Nat.lt_succ_self b
+                have hmul_lt : b * q < (b + 1) * q :=
+                  Nat.mul_lt_mul_of_pos_right hcoef_lt hqpos
+                have hupper_nat :
+                    (2 * a + 1) * q + 2 * q' <
+                      (2 * a + 1 + 1) * q + q' := by
+                  have htwoprev : 2 * q' < q + q' := by
+                    omega
+                  calc
+                    (2 * a + 1) * q + 2 * q'
+                        < (2 * a + 1) * q + (q + q') :=
+                          Nat.add_lt_add_left htwoprev _
+                    _ = (2 * a + 1 + 1) * q + q' := by
+                          ring
+                dsimp [X₂]
+                rw [hb_eq]
+                exact hupper_nat
+            exact no_path_between_principal_and_next1
+              (a := ay) (n := n) (A := b) (q := q) (q' := q')
+              hycf.1
+              (by dsimp [b]; rw [hn1])
+              (by dsimp [q]; exact hden_eq)
+              (by dsimp [q']; exact hdenPrev_eq)
+              hpath hgap
+          · have hb_le_2a : b ≤ 2 * a := by omega
+            by_cases heqF1 : X₂ = (b + 1) * q + q'
+            · exfalso
+
+              have hcoef_le : b + 1 ≤ 2 * a + 1 := by
+                omega
+
+              have hmul_le : (b + 1) * q ≤ (2 * a + 1) * q :=
+                Nat.mul_le_mul_right q hcoef_le
+
+              have hF1_lt_X₂ : (b + 1) * q + q' < X₂ := by
+                dsimp [X₂]
+                omega
+
+              have hbad : (b + 1) * q + q' < (b + 1) * q + q' := by
+                calc
+                  (b + 1) * q + q' < X₂ := hF1_lt_X₂
+                  _ = (b + 1) * q + q' := heqF1
+
+              exact (lt_irrefl ((b + 1) * q + q')) hbad
+            · exfalso
+              have hgap :
+                  (b + 1) * q + q' < X₂ ∧
+                    X₂ < (2 * b + 1) * q + 2 * q' := by
+                constructor
+                · have hcoef_le : b + 1 ≤ 2 * a + 1 := by
+                    omega
+
+                  have hmul_le : (b + 1) * q ≤ (2 * a + 1) * q :=
+                    Nat.mul_le_mul_right q hcoef_le
+
+                  have hle : (b + 1) * q + q' ≤ X₂ := by
+                    dsimp [X₂]
+                    omega
+
+                  have hne : (b + 1) * q + q' ≠ X₂ := by
+                    intro h
+                    exact heqF1 h.symm
+
+                  exact lt_of_le_of_ne hle hne
+
+                · have hcoef_lt : 2 * a + 1 < 2 * b + 1 := by
+                    omega
+
+                  have hmul_lt : (2 * a + 1) * q < (2 * b + 1) * q :=
+                    Nat.mul_lt_mul_of_pos_right hcoef_lt hqpos
+
+                  dsimp [X₂]
+                  omega
+              exact no_path_between_next1_next2
+                (a := ay) (n := n) (A := b) (q := q) (q' := q')
+                hycf.1
+                (by dsimp [b]; rw [hn1])
+                (by dsimp [q]; exact hden_eq)
+                (by dsimp [q']; exact hdenPrev_eq)
+                hpath hgap
+
+    have hX₂_not_y : X₂ ∉ oddCFDenoms y := by
+      exact not_mem_oddCFDenoms_of_all_path_reprs_even
+        hypos hyirr hX₂_all_y_reprs_even
+    intro hsets
+    exact hX₂_not_y (by simpa [hsets] using hX₂_mem_x)
+
+/-- If two irrational numbers in `[1,2]` have the same canonical continued
+fraction coefficients before index `j`, but differ at index `j`, then their
+parity-filtered principal/intermediate denominator sets differ.
+
+This is the first-deviation lemma for the equivalence-class problem. -/
+theorem oddCFDenoms_ne_of_firstDiff_simplePartialQuotient
+    {x y : ℝ}
+    (hxirr : IsIrrational x) (hyirr : IsIrrational y)
+    (hxI : x ∈ Set.Icc (1 : ℝ) 2)
+    (hyI : y ∈ Set.Icc (1 : ℝ) 2)
+    {j : ℕ}
+    (hprefix : ∀ i : ℕ, i < j →
+      simplePartialQuotient x i = simplePartialQuotient y i)
+    (hdiff :
+      simplePartialQuotient x j ≠ simplePartialQuotient y j) :
+    oddCFDenoms x ≠ oddCFDenoms y := by
+  rcases lt_or_gt_of_ne hdiff with hlt | hgt
+  · exact oddCFDenoms_ne_of_firstDiff_lt
+      hxirr hyirr hxI hyI hprefix hlt
+  · have hprefix_symm : ∀ i : ℕ, i < j →
+        simplePartialQuotient y i = simplePartialQuotient x i := by
+      intro i hi
+      exact (hprefix i hi).symm
+    have hne :
+        oddCFDenoms y ≠ oddCFDenoms x :=
+      oddCFDenoms_ne_of_firstDiff_lt
+        hyirr hxirr hyI hxI hprefix_symm hgt
+    intro hxy
+    exact hne hxy.symm
 
 end IrrationalityAr

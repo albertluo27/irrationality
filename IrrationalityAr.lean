@@ -6,4 +6,5 @@ import IrrationalityAr.RationalCase
 import IrrationalityAr.IrrationalCase
 import IrrationalityAr.Characterization
 import IrrationalityAr.ContinuedFractions
+import IrrationalityAr.EquivalenceClass
 import IrrationalityAr.Variants
