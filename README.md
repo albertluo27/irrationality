@@ -1,32 +1,130 @@
 # irrationality_ar
 
-A Lean 4 / mathlib project for formalizing the floor-sum construction
+A Lean 4 / mathlib formalization of the floor-sum divisibility set
 
-- `F_r(n) = ∑_{k=1}^n ⌊k r⌋`
-- `A_r = {n ≥ 1 : n ∣ F_r(n)}`
+```text
+F_r(n) = sum_{k=1}^n floor(k r)
+A_r    = { n >= 1 : n divides F_r(n) }.
+```
 
-and validating the proposed rationality characterization.
+The project now contains two completed formalization layers:
 
-## Current status
+1. the rationality characterization of eventual arithmetic progression behavior;
+2. the inverse/equivalence-class theorem for irrational parameters, using the
+   parity-filtered continued-fraction denominator set.
 
-The project formalizes the rational/eventual-AP direction, the
-irrational/no-infinite-AP direction, the continued-fraction classification
-layer, and the final characterization theorem.
+The current source tree is proof-hole free: `lake build` succeeds and the
+project sources contain no `sorry`.
 
-The source tree is proof-hole free. A completed certificate should pass both
-`lake build` and the no-sorry check below.
+## Main Results
 
-Run:
+The AP characterization is formalized as:
+
+```lean
+theorem rational_iff_eventuallyAP (r : ℝ) :
+  IsRational r ↔ IsEventuallyAP (A r)
+```
+
+In words, `A_r` is eventually an arithmetic progression exactly when `r` is
+rational. The irrational direction proves that `A_r` contains no infinite
+arithmetic progression.
+
+The continued-fraction bridge is formalized as:
+
+```lean
+theorem A_eq_odd_convergent_or_semiconvergent
+```
+
+For positive irrational `alpha`, this identifies `A_alpha` with the
+denominators of principal or intermediate continued-fraction approximants whose
+numerator is odd, shifted by one.
+
+The new equivalence-class theorem is formalized as:
+
+```lean
+theorem equivalence_class_problem
+theorem AEquivClass_eq_symmetryClass
+```
+
+In words, for irrational `alpha`,
+
+```text
+A_beta = A_alpha
+```
+
+holds exactly for the obvious symmetries
+
+```text
+beta = alpha + 2m      or      beta = -alpha + 2m
+```
+
+with `m : Int`.
+
+## New Progress
+
+The latest formalization work added `IrrationalityAr/EquivalenceClass.lean` and
+completed the continued-fraction rigidity machinery needed by it.
+
+The key new theorem is:
+
+```lean
+theorem oddCFDenoms_rigid_on_Icc
+```
+
+Human-readable statement: if two irrational numbers in `[1, 2]` have the same
+parity-filtered principal/intermediate continued-fraction denominator set, then
+the two numbers are equal.
+
+The bottleneck first-deviation theorem is also closed:
+
+```lean
+theorem oddCFDenoms_ne_of_firstDiff_simplePartialQuotient
+```
+
+Human-readable statement: if two canonical simple continued fractions agree
+before a first index `j` and differ at `j`, then their odd-numerator
+principal/intermediate denominator sets are different.
+
+Supporting API added in `ContinuedFractions.lean` includes:
+
+- `CFDenominatorPath`
+- `OddCFPathPair`
+- `oddCFDenoms_mem_of_oddCFPathPair`
+- `simplePartialQuotient_isSimpleCFExpansion`
+- `exists_firstDiff_simplePartialQuotient_of_ne`
+- `oddCFDenoms_subset_canonical_pair_path`
+- `oddCFDenoms_subset_canonical_path`
+- `not_mem_oddCFDenoms_of_between_consecutive_canonical_denoms`
+
+## Validation
+
+Run the full Lean build:
+
+```bash
+lake build
+```
+
+Run the no-sorry guard:
 
 ```bash
 ./scripts/check_no_sorry.sh
 ```
 
-A completed certificate must pass that check with no proof holes.
+The current checked state passes `lake build`. A local scan of project sources
+also finds no local `axiom` or `unsafe` declarations.
+
+Expected axiom profile for the main theorem chain is the standard mathlib/Lean
+classical profile:
+
+```text
+propext
+Classical.choice
+Quot.sound
+```
 
 ## Setup
 
-Install Lean using the official Lean 4 VS Code extension and `elan`, then run:
+Install Lean using `elan` or the official Lean 4 VS Code extension, then run:
 
 ```bash
 lake update
@@ -36,41 +134,33 @@ lake build
 
 The project is pinned to Lean `v4.30.0` and mathlib `v4.30.0`.
 
-## Module order
+## Module Map
 
-1. `Basic.lean`
-   - definitions of `floorMul`, `floorSum`, `A`, rationality, irrationality
-2. `FractionalParts.lean`
-   - record minima and maxima of fractional parts
-3. `Progressions.lean`
-   - precise definitions of infinite and eventual arithmetic progressions
-4. `Pairing.lean`
-   - shared count `C_r(q)` and the pairing identity
-5. `RationalCase.lean`
-   - explicit rational tail congruence and eventual arithmetic progression
-6. `IrrationalCase.lean`
-   - central membership theorem via record extrema
-   - translated irrational-rotation density bridge
-   - no-infinite-arithmetic-progression theorem
-7. `Characterization.lean`
-   - combines the independent rational and irrational directions
-8. `ContinuedFractions.lean`
-   - continued-fraction classification of `A_α`
-   - existence of simple continued fractions for positive irrational reals
-   - best-approximation bridge through convergents and semiconvergents
-9. `Variants.lean`
-   - ceiling and nearest-integer experiments kept separate from the core proof
+- `IrrationalityAr.Basic`
+  Core definitions: `floorMul`, `floorSum`, `A`, rationality, irrationality.
+- `IrrationalityAr.FractionalParts`
+  Record minima and maxima for finite fractional-part sets.
+- `IrrationalityAr.Progressions`
+  Infinite and eventual arithmetic progression definitions.
+- `IrrationalityAr.Pairing`
+  Shared count `C_r(q)` and the central pairing identity.
+- `IrrationalityAr.RationalCase`
+  Rational tail congruence and eventual arithmetic progression.
+- `IrrationalityAr.IrrationalCase`
+  Record-extreme membership criterion, density bridge, and no-infinite-AP theorem.
+- `IrrationalityAr.Characterization`
+  Combines rational and irrational directions into `rational_iff_eventuallyAP`.
+- `IrrationalityAr.ContinuedFractions`
+  Simple continued fractions, convergents, semiconvergents, best-approximation
+  bridge, and denominator-path rigidity.
+- `IrrationalityAr.EquivalenceClass`
+  The inverse theorem: equality of `A`-sets for irrational parameters is exactly
+  the symmetry relation generated by period `2` and reflection.
+- `IrrationalityAr.Variants`
+  Separate ceiling and nearest-integer experiments.
 
-## Main Formalized Lemmas
+## Repository Hygiene
 
-The core AP argument is represented by named Lean pieces including
-`two_mul_floorSum_pred_eq`, `aboveCount_eq_zero_or_eq_of_mem_A`,
-`mem_A_iff_record_extreme`, `denseRange_translated_nat_toAddCircle`, and
-`irrational_no_infiniteAP`.
-
-The rational direction is represented by `mem_A_rat_iff_modEq` and
-`rational_eventuallyAP`. The combined theorem is
-`rational_iff_eventuallyAP`.
-
-The continued-fraction classification is represented by
-`A_eq_odd_convergent_or_semiconvergent`.
+The formal project is imported through `IrrationalityAr.lean`. Scratch notes and
+writeups are intentionally kept out of the theorem dependency chain unless they
+are explicitly imported by the Lean project.
