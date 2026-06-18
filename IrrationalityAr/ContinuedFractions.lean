@@ -734,6 +734,14 @@ private theorem continuant_det (a : ℕ → ℕ) (n : ℕ) :
               rw [pow_succ]
               ring
 
+/-- The determinant of consecutive continuant numerator/denominator vectors
+has absolute value one. -/
+theorem continuant_det_abs_one (a : ℕ → ℕ) (n : ℕ) :
+    |(continuantNum a n : ℤ) * (continuantDenPrev a n : ℤ) -
+      (continuantNumPrev a n : ℤ) * (continuantDen a n : ℤ)| = 1 := by
+  rw [continuant_det]
+  norm_num
+
 private theorem continuantNum_coprime_prev (a : ℕ → ℕ) :
     ∀ n : ℕ, Nat.Coprime (continuantNum a n) (continuantNumPrev a n)
   | 0 => by
@@ -3617,6 +3625,641 @@ private theorem convergent_error_le_inv_sq
       rw [abs_div, hnum_abs, abs_of_pos hdenmulpos]
     _ ≤ 1 / qn ^ 2 :=
       one_div_le_one_div_of_le hsqpos hsq_le_denmul
+
+/-- Sharper standard error estimate for a continued-fraction convergent:
+`|α - pₙ / qₙ| < 1 / (qₙ qₙ₊₁)`. -/
+theorem convergent_error_lt_inv_mul_q_qsucc
+    {α : ℝ} {a : ℕ → ℕ}
+    (hcf : IsSimpleCFExpansion α a) (n : ℕ) :
+    |α -
+        (continuantNum a n : ℝ) /
+          (continuantDen a n : ℝ)| <
+      1 /
+        ((continuantDen a n : ℝ) *
+          (continuantDen a (n + 1) : ℝ)) := by
+  rcases hcf with ⟨hpos, _, htails⟩
+  rcases htails n with ⟨β, hβgt, _, hα⟩
+  let pn : ℝ := continuantNum a n
+  let ppn : ℝ := continuantNumPrev a n
+  let qn : ℝ := continuantDen a n
+  let qpn : ℝ := continuantDenPrev a n
+  let qnext : ℝ := continuantDen a (n + 1)
+  have hqnNat : 0 < continuantDen a n :=
+    continuantDen_pos_of_partials a hpos n
+  have hqnpos : 0 < qn := by
+    dsimp [qn]
+    exact_mod_cast hqnNat
+  have hqnextNat : 0 < continuantDen a (n + 1) :=
+    continuantDen_pos_of_partials a hpos (n + 1)
+  have hqnextpos : 0 < qnext := by
+    dsimp [qnext]
+    exact_mod_cast hqnextNat
+  have htail_one : (1 : ℝ) ≤ a (n + 1) := by
+    exact_mod_cast (Nat.succ_le_iff.mpr (hpos n))
+  have hβ_gt_one : (1 : ℝ) < β := lt_of_le_of_lt htail_one hβgt
+  have hβpos : 0 < β := lt_trans zero_lt_one hβ_gt_one
+  have hdenpos : 0 < β * qn + qpn := by
+    dsimp [qn, qpn]
+    simpa using continuant_denominator_pos a n hβpos
+  have hdenmulpos : 0 < (β * qn + qpn) * qn :=
+    mul_pos hdenpos hqnpos
+  have hdetR :
+      pn * qpn - ppn * qn =
+        ((-1 : ℤ) ^ (n + 1) : ℝ) := by
+    dsimp [pn, ppn, qn, qpn]
+    exact_mod_cast continuant_det a n
+  have hnum_abs : |ppn * qn - pn * qpn| = 1 := by
+    have hneg : ppn * qn - pn * qpn = -(pn * qpn - ppn * qn) := by
+      ring
+    rw [hneg, hdetR, abs_neg]
+    norm_num
+  have hdiff :
+      α - pn / qn =
+        (ppn * qn - pn * qpn) / ((β * qn + qpn) * qn) := by
+    have hα' : α = (β * pn + ppn) / (β * qn + qpn) := by
+      simpa [pn, ppn, qn, qpn] using hα
+    rw [hα']
+    field_simp [ne_of_gt hdenpos, ne_of_gt hqnpos]
+    ring
+  have hqnext_eq :
+      qnext = (a (n + 1) : ℝ) * qn + qpn := by
+    dsimp [qnext, qn, qpn]
+    rw [continuantDen_succ]
+    norm_num
+  have hqnext_lt_den : qnext < β * qn + qpn := by
+    rw [hqnext_eq]
+    have hmul : (a (n + 1) : ℝ) * qn < β * qn :=
+      mul_lt_mul_of_pos_right hβgt hqnpos
+    linarith
+  have htargetpos : 0 < qn * qnext := mul_pos hqnpos hqnextpos
+  have htarget_lt_actual : qn * qnext < (β * qn + qpn) * qn := by
+    have hmul := mul_lt_mul_of_pos_right hqnext_lt_den hqnpos
+    simpa [mul_comm, mul_left_comm, mul_assoc] using hmul
+  change |α - pn / qn| < 1 / (qn * qnext)
+  calc
+    |α - pn / qn| =
+        |(ppn * qn - pn * qpn) / ((β * qn + qpn) * qn)| := by
+      rw [hdiff]
+    _ = 1 / ((β * qn + qpn) * qn) := by
+      rw [abs_div, hnum_abs, abs_of_pos hdenmulpos]
+    _ < 1 / (qn * qnext) :=
+      one_div_lt_one_div_of_lt htargetpos htarget_lt_actual
+
+/-- Integer-form lower bound for the `n`-th convergent error:
+`|qₙ α - pₙ| > 1 / (qₙ + qₙ₊₁)`. -/
+theorem convergent_integer_error_gt_inv_sum_q_qsucc
+    {α : ℝ} {a : ℕ → ℕ}
+    (hcf : IsSimpleCFExpansion α a) (n : ℕ) :
+    |(continuantDen a n : ℝ) * α -
+        (continuantNum a n : ℝ)| >
+      1 /
+        ((continuantDen a n : ℝ) +
+          (continuantDen a (n + 1) : ℝ)) := by
+  rcases hcf with ⟨hpos, _, htails⟩
+  rcases htails n with ⟨β, _, hβlt, hα⟩
+  let pn : ℝ := continuantNum a n
+  let ppn : ℝ := continuantNumPrev a n
+  let qn : ℝ := continuantDen a n
+  let qpn : ℝ := continuantDenPrev a n
+  let qnext : ℝ := continuantDen a (n + 1)
+  have hqnNat : 0 < continuantDen a n :=
+    continuantDen_pos_of_partials a hpos n
+  have hqnpos : 0 < qn := by
+    dsimp [qn]
+    exact_mod_cast hqnNat
+  have htail_one : (1 : ℝ) ≤ a (n + 1) := by
+    exact_mod_cast (Nat.succ_le_iff.mpr (hpos n))
+  have hβpos : 0 < β := by
+    have hnonneg : (0 : ℝ) ≤ a (n + 1) := by positivity
+    linarith
+  have hdenpos : 0 < β * qn + qpn := by
+    dsimp [qn, qpn]
+    simpa using continuant_denominator_pos a n hβpos
+  have hdetR :
+      pn * qpn - ppn * qn =
+        ((-1 : ℤ) ^ (n + 1) : ℝ) := by
+    dsimp [pn, ppn, qn, qpn]
+    exact_mod_cast continuant_det a n
+  have hnum_abs : |qn * ppn - pn * qpn| = 1 := by
+    have hbase : |ppn * qn - pn * qpn| = 1 := by
+      have hneg :
+          ppn * qn - pn * qpn = -(pn * qpn - ppn * qn) := by
+        ring
+      rw [hneg, hdetR, abs_neg]
+      norm_num
+    simpa [mul_comm, mul_left_comm, mul_assoc] using hbase
+  have hdiff :
+      qn * α - pn =
+        (qn * ppn - pn * qpn) / (β * qn + qpn) := by
+    have hα' : α = (β * pn + ppn) / (β * qn + qpn) := by
+      simpa [pn, ppn, qn, qpn] using hα
+    have hdenpos' : 0 < qn * β + qpn := by
+      simpa [mul_comm] using hdenpos
+    rw [hα']
+    field_simp [ne_of_gt hdenpos, ne_of_gt hdenpos']
+    ring
+  have hqnext_eq :
+      qnext = (a (n + 1) : ℝ) * qn + qpn := by
+    dsimp [qnext, qn, qpn]
+    rw [continuantDen_succ]
+    norm_num
+  have hden_lt_target : β * qn + qpn < qn + qnext := by
+    have hβq_lt : β * qn < ((a (n + 1) : ℝ) + 1) * qn :=
+      mul_lt_mul_of_pos_right hβlt hqnpos
+    calc
+      β * qn + qpn < ((a (n + 1) : ℝ) + 1) * qn + qpn := by
+        linarith
+      _ = qn + qnext := by
+        rw [hqnext_eq]
+        ring
+  change |qn * α - pn| > 1 / (qn + qnext)
+  calc
+    |qn * α - pn| =
+        |(qn * ppn - pn * qpn) / (β * qn + qpn)| := by
+      rw [hdiff]
+    _ = 1 / (β * qn + qpn) := by
+      rw [abs_div, hnum_abs, abs_of_pos hdenpos]
+    _ > 1 / (qn + qnext) :=
+      one_div_lt_one_div_of_lt hdenpos hden_lt_target
+
+/-- A weaker but handier integer-form lower bound:
+`|qₙ α - pₙ| > 1 / (2 qₙ₊₁)`. -/
+theorem convergent_integer_error_gt_inv_two_qsucc
+    {α : ℝ} {a : ℕ → ℕ}
+    (hcf : IsSimpleCFExpansion α a) (n : ℕ) :
+    |(continuantDen a n : ℝ) * α -
+        (continuantNum a n : ℝ)| >
+      1 / (2 * (continuantDen a (n + 1) : ℝ)) := by
+  rcases hcf with ⟨hpos, htendsto, htails⟩
+  have hcf' : IsSimpleCFExpansion α a := ⟨hpos, htendsto, htails⟩
+  let qn : ℝ := continuantDen a n
+  let qnext : ℝ := continuantDen a (n + 1)
+  have hmain :
+      |qn * α - (continuantNum a n : ℝ)| > 1 / (qn + qnext) := by
+    simpa [qn, qnext] using
+      convergent_integer_error_gt_inv_sum_q_qsucc hcf' n
+  have hqnextNat : 0 < continuantDen a (n + 1) :=
+    continuantDen_pos_of_partials a hpos (n + 1)
+  have hqnextpos : 0 < qnext := by
+    dsimp [qnext]
+    exact_mod_cast hqnextNat
+  have hleNat : continuantDen a n ≤ continuantDen a (n + 1) :=
+    continuantDen_le_succ_of_partials hpos n
+  have hle : qn ≤ qnext := by
+    dsimp [qn, qnext]
+    exact_mod_cast hleNat
+  have hsumpos : 0 < qn + qnext := by
+    have hqn_nonneg : 0 ≤ qn := by positivity
+    positivity
+  have hsum_le_two : qn + qnext ≤ 2 * qnext := by
+    linarith
+  have hrecip : 1 / (2 * qnext) ≤ 1 / (qn + qnext) :=
+    one_div_le_one_div_of_le hsumpos hsum_le_two
+  change
+    |qn * α - (continuantNum a n : ℝ)| >
+      1 / (2 * qnext)
+  linarith
+
+/-- The current and previous convergent integer errors have opposite signs. -/
+theorem convergent_error_mul_prev_error_lt_zero
+    {α : ℝ} {a : ℕ → ℕ}
+    (hcf : IsSimpleCFExpansion α a) (n : ℕ) :
+    ((continuantDen a n : ℝ) * α -
+      (continuantNum a n : ℝ)) *
+    ((continuantDenPrev a n : ℝ) * α -
+      (continuantNumPrev a n : ℝ)) < 0 := by
+  rcases hcf with ⟨hpos, _, htails⟩
+  rcases htails n with ⟨β, hβgt, _, hα⟩
+  let pn : ℝ := continuantNum a n
+  let ppn : ℝ := continuantNumPrev a n
+  let qn : ℝ := continuantDen a n
+  let qpn : ℝ := continuantDenPrev a n
+  let Δ : ℝ := pn * qpn - ppn * qn
+  let D : ℝ := β * qn + qpn
+  have htail_one : (1 : ℝ) ≤ a (n + 1) := by
+    exact_mod_cast (Nat.succ_le_iff.mpr (hpos n))
+  have hβ_gt_one : (1 : ℝ) < β := lt_of_le_of_lt htail_one hβgt
+  have hβpos : 0 < β := lt_trans zero_lt_one hβ_gt_one
+  have hdenpos : 0 < D := by
+    dsimp [D, qn, qpn]
+    simpa using continuant_denominator_pos a n hβpos
+  have hdetR : Δ = ((-1 : ℤ) ^ (n + 1) : ℝ) := by
+    dsimp [Δ, pn, ppn, qn, qpn]
+    exact_mod_cast continuant_det a n
+  have hΔne : Δ ≠ 0 := by
+    rw [hdetR]
+    norm_num
+  have hcur : qn * α - pn = -Δ / D := by
+    have hα' : α = (β * pn + ppn) / D := by
+      simpa [D, pn, ppn, qn, qpn] using hα
+    rw [hα']
+    field_simp [ne_of_gt hdenpos]
+    ring
+  have hprev : qpn * α - ppn = β * Δ / D := by
+    have hα' : α = (β * pn + ppn) / D := by
+      simpa [D, pn, ppn, qn, qpn] using hα
+    rw [hα']
+    field_simp [ne_of_gt hdenpos]
+    ring
+  have hDsqpos : 0 < D ^ 2 := pow_pos hdenpos 2
+  have hΔsqpos : 0 < Δ ^ 2 := sq_pos_of_ne_zero hΔne
+  have hfrac_pos : 0 < β * Δ ^ 2 / D ^ 2 :=
+    div_pos (mul_pos hβpos hΔsqpos) hDsqpos
+  have hprod_eq :
+      (-Δ / D) * (β * Δ / D) = -(β * Δ ^ 2 / D ^ 2) := by
+    field_simp [ne_of_gt hdenpos]
+  change (qn * α - pn) * (qpn * α - ppn) < 0
+  calc
+    (qn * α - pn) * (qpn * α - ppn)
+        = (-Δ / D) * (β * Δ / D) := by
+      rw [hcur, hprev]
+    _ = -(β * Δ ^ 2 / D ^ 2) := hprod_eq
+    _ < 0 := by
+      linarith
+
+/-- The current convergent integer error is strictly smaller in magnitude than
+the previous convergent integer error. -/
+theorem abs_convergent_error_lt_abs_prev_error
+    {α : ℝ} {a : ℕ → ℕ}
+    (hcf : IsSimpleCFExpansion α a) (n : ℕ) :
+    |(continuantDen a n : ℝ) * α -
+      (continuantNum a n : ℝ)| <
+    |(continuantDenPrev a n : ℝ) * α -
+      (continuantNumPrev a n : ℝ)| := by
+  rcases hcf with ⟨hpos, _, htails⟩
+  rcases htails n with ⟨β, hβgt, _, hα⟩
+  let pn : ℝ := continuantNum a n
+  let ppn : ℝ := continuantNumPrev a n
+  let qn : ℝ := continuantDen a n
+  let qpn : ℝ := continuantDenPrev a n
+  let Δ : ℝ := pn * qpn - ppn * qn
+  let D : ℝ := β * qn + qpn
+  have htail_one : (1 : ℝ) ≤ a (n + 1) := by
+    exact_mod_cast (Nat.succ_le_iff.mpr (hpos n))
+  have hβ_gt_one : (1 : ℝ) < β := lt_of_le_of_lt htail_one hβgt
+  have hβpos : 0 < β := lt_trans zero_lt_one hβ_gt_one
+  have hdenpos : 0 < D := by
+    dsimp [D, qn, qpn]
+    simpa using continuant_denominator_pos a n hβpos
+  have hdetR : Δ = ((-1 : ℤ) ^ (n + 1) : ℝ) := by
+    dsimp [Δ, pn, ppn, qn, qpn]
+    exact_mod_cast continuant_det a n
+  have hΔabs : |Δ| = 1 := by
+    rw [hdetR]
+    norm_num
+  have hcur : qn * α - pn = -Δ / D := by
+    have hα' : α = (β * pn + ppn) / D := by
+      simpa [D, pn, ppn, qn, qpn] using hα
+    rw [hα']
+    field_simp [ne_of_gt hdenpos]
+    ring
+  have hprev : qpn * α - ppn = β * Δ / D := by
+    have hα' : α = (β * pn + ppn) / D := by
+      simpa [D, pn, ppn, qn, qpn] using hα
+    rw [hα']
+    field_simp [ne_of_gt hdenpos]
+    ring
+  have hcur_abs : |qn * α - pn| = 1 / D := by
+    rw [hcur, abs_div, abs_neg, hΔabs, abs_of_pos hdenpos]
+  have hprev_abs : |qpn * α - ppn| = β / D := by
+    rw [hprev, abs_div, abs_mul, abs_of_pos hβpos, hΔabs,
+      abs_of_pos hdenpos]
+    ring
+  change |qn * α - pn| < |qpn * α - ppn|
+  calc
+    |qn * α - pn| = 1 / D := hcur_abs
+    _ < β / D := div_lt_div_of_pos_right hβ_gt_one hdenpos
+    _ = |qpn * α - ppn| := hprev_abs.symm
+
+/-- Once the second-kind best-approximation inequality is available, the
+standard rational lower bound between consecutive convergent denominators is
+only algebra plus the convergent integer-error estimate. -/
+theorem rational_approx_lower_bound_between_convergents_of_best
+    {α : ℝ} {a : ℕ → ℕ}
+    (hcf : IsSimpleCFExpansion α a)
+    (n q : ℕ) (p : ℤ)
+    (hqpos : 0 < q)
+    (hbest :
+      |(q : ℝ) * α - (p : ℝ)| ≥
+        |(continuantDen a n : ℝ) * α -
+          (continuantNum a n : ℝ)|) :
+    |α - (p : ℝ) / (q : ℝ)| ≥
+      1 / (2 * (q : ℝ) * (continuantDen a (n + 1) : ℝ)) := by
+  rcases hcf with ⟨hpos, htendsto, htails⟩
+  have hcf' : IsSimpleCFExpansion α a := ⟨hpos, htendsto, htails⟩
+  let qnext : ℝ := continuantDen a (n + 1)
+  have hqRpos : 0 < (q : ℝ) := by exact_mod_cast hqpos
+  have hqnextNat : 0 < continuantDen a (n + 1) :=
+    continuantDen_pos_of_partials a hpos (n + 1)
+  have hqnextpos : 0 < qnext := by
+    dsimp [qnext]
+    exact_mod_cast hqnextNat
+  have hconv :
+      |(continuantDen a n : ℝ) * α -
+        (continuantNum a n : ℝ)| >
+      1 / (2 * qnext) := by
+    simpa [qnext] using
+      convergent_integer_error_gt_inv_two_qsucc hcf' n
+  have hnum_lower :
+      1 / (2 * qnext) < |(q : ℝ) * α - (p : ℝ)| :=
+    lt_of_lt_of_le hconv hbest
+  have hscaled :
+      1 / (2 * qnext) / (q : ℝ) <
+        |(q : ℝ) * α - (p : ℝ)| / (q : ℝ) :=
+    div_lt_div_of_pos_right hnum_lower hqRpos
+  have htarget :
+      1 / (2 * qnext) / (q : ℝ) =
+        1 / (2 * (q : ℝ) * qnext) := by
+    field_simp [ne_of_gt hqRpos, ne_of_gt hqnextpos]
+  have herror :
+      |α - (p : ℝ) / (q : ℝ)| =
+        |(q : ℝ) * α - (p : ℝ)| / (q : ℝ) := by
+    have hdiff :
+        α - (p : ℝ) / (q : ℝ) =
+          ((q : ℝ) * α - (p : ℝ)) / (q : ℝ) := by
+      field_simp [ne_of_gt hqRpos]
+    rw [hdiff, abs_div, abs_of_pos hqRpos]
+  change |α - (p : ℝ) / (q : ℝ)| ≥
+      1 / (2 * (q : ℝ) * qnext)
+  rw [herror]
+  rw [← htarget]
+  exact le_of_lt hscaled
+
+/-- Exact relation between consecutive integer errors at the tail `β`:
+`qₙ₋₁ α - pₙ₋₁ = -β (qₙ α - pₙ)`. -/
+theorem prev_error_eq_neg_tail_mul_error
+    {α : ℝ} {a : ℕ → ℕ}
+    (hcf : IsSimpleCFExpansion α a) (n : ℕ) :
+    ∃ β : ℝ,
+      (a (n + 1) : ℝ) < β ∧
+        β < (a (n + 1) : ℝ) + 1 ∧
+        ((continuantDenPrev a n : ℝ) * α -
+          (continuantNumPrev a n : ℝ)) =
+        -β *
+          ((continuantDen a n : ℝ) * α -
+            (continuantNum a n : ℝ)) := by
+  rcases hcf with ⟨hpos, _, htails⟩
+  rcases htails n with ⟨β, hβgt, hβlt, hα⟩
+  refine ⟨β, hβgt, hβlt, ?_⟩
+  let pn : ℝ := continuantNum a n
+  let ppn : ℝ := continuantNumPrev a n
+  let qn : ℝ := continuantDen a n
+  let qpn : ℝ := continuantDenPrev a n
+  let Δ : ℝ := pn * qpn - ppn * qn
+  let D : ℝ := β * qn + qpn
+  have hβpos : 0 < β := by
+    have hanonneg : (0 : ℝ) ≤ a (n + 1) := by positivity
+    linarith
+  have hdenpos : 0 < D := by
+    dsimp [D, qn, qpn]
+    simpa using continuant_denominator_pos a n hβpos
+  have hcur : qn * α - pn = -Δ / D := by
+    have hα' : α = (β * pn + ppn) / D := by
+      simpa [D, pn, ppn, qn, qpn] using hα
+    rw [hα']
+    field_simp [ne_of_gt hdenpos]
+    ring
+  have hprev : qpn * α - ppn = β * Δ / D := by
+    have hα' : α = (β * pn + ppn) / D := by
+      simpa [D, pn, ppn, qn, qpn] using hα
+    rw [hα']
+    field_simp [ne_of_gt hdenpos]
+    ring
+  change qpn * α - ppn = -β * (qn * α - pn)
+  calc
+    qpn * α - ppn = β * Δ / D := hprev
+    _ = -β * (-Δ / D) := by
+      field_simp [ne_of_gt hdenpos]
+    _ = -β * (qn * α - pn) := by rw [hcur]
+
+/-- Consecutive continuant vectors form a `ℤ`-basis of `ℤ²`. -/
+theorem exists_convergent_zbasis_coeffs
+    (a : ℕ → ℕ) (n : ℕ) (p q : ℤ) :
+    ∃ r s : ℤ,
+      p =
+        r * (continuantNum a n : ℤ) +
+          s * (continuantNumPrev a n : ℤ) ∧
+      q =
+        r * (continuantDen a n : ℤ) +
+          s * (continuantDenPrev a n : ℤ) := by
+  let pn : ℤ := continuantNum a n
+  let ppn : ℤ := continuantNumPrev a n
+  let qn : ℤ := continuantDen a n
+  let qpn : ℤ := continuantDenPrev a n
+  have hdet :
+      pn * qpn - ppn * qn = (-1 : ℤ) ^ (n + 1) := by
+    dsimp [pn, ppn, qn, qpn]
+    exact continuant_det a n
+  rcases neg_one_pow_eq_or ℤ (n + 1) with hpow | hpow
+  · have hdet_one : pn * qpn - ppn * qn = 1 := by
+      rw [hdet, hpow]
+    refine ⟨p * qpn - ppn * q, pn * q - p * qn, ?_, ?_⟩
+    · dsimp [pn, ppn, qn, qpn] at hdet_one ⊢
+      calc
+        p = p * (pn * qpn - ppn * qn) := by
+          rw [hdet_one]
+          ring
+        _ =
+            (p * qpn - ppn * q) * pn +
+              (pn * q - p * qn) * ppn := by
+          ring
+    · dsimp [pn, ppn, qn, qpn] at hdet_one ⊢
+      calc
+        q = q * (pn * qpn - ppn * qn) := by
+          rw [hdet_one]
+          ring
+        _ =
+            (p * qpn - ppn * q) * qn +
+              (pn * q - p * qn) * qpn := by
+          ring
+  · have hdet_neg_one : pn * qpn - ppn * qn = -1 := by
+      rw [hdet, hpow]
+    refine ⟨-(p * qpn - ppn * q), -(pn * q - p * qn), ?_, ?_⟩
+    · dsimp [pn, ppn, qn, qpn] at hdet_neg_one ⊢
+      calc
+        p = -p * (pn * qpn - ppn * qn) := by
+          rw [hdet_neg_one]
+          ring
+        _ =
+            -(p * qpn - ppn * q) * pn +
+              -(pn * q - p * qn) * ppn := by
+          ring
+    · dsimp [pn, ppn, qn, qpn] at hdet_neg_one ⊢
+      calc
+        q = -q * (pn * qpn - ppn * qn) := by
+          rw [hdet_neg_one]
+          ring
+        _ =
+            -(p * qpn - ppn * q) * qn +
+              -(pn * q - p * qn) * qpn := by
+          ring
+
+/-- Coefficient restriction underlying the second-kind best-approximation
+property. If `0 < r qₙ + s qₙ₋₁ < A qₙ + qₙ₋₁` and `β > A`, then
+`|r - s β| ≥ 1`. -/
+theorem abs_int_coeff_sub_tail_ge_one_of_den_lt_qsucc
+    {β : ℝ} {A qn qp : ℕ} {r s : ℤ}
+    (hApos : 0 < A)
+    (hβA : (A : ℝ) < β)
+    (hqn : 0 < qn)
+    (hqpos :
+      0 <
+        r * (qn : ℤ) + s * (qp : ℤ))
+    (hqhi :
+      r * (qn : ℤ) + s * (qp : ℤ) <
+        (A : ℤ) * (qn : ℤ) + (qp : ℤ)) :
+    1 ≤ |(r : ℝ) - (s : ℝ) * β| := by
+  have hβpos : 0 < β := by
+    have hAnonneg : (0 : ℝ) ≤ A := by positivity
+    linarith
+  have hqnZpos : (0 : ℤ) < (qn : ℤ) := by exact_mod_cast hqn
+  have hqpZnonneg : (0 : ℤ) ≤ (qp : ℤ) := by exact_mod_cast Nat.zero_le qp
+  by_cases hs_nonpos : s ≤ 0
+  · have hsqp_nonpos : s * (qp : ℤ) ≤ 0 :=
+      mul_nonpos_of_nonpos_of_nonneg hs_nonpos hqpZnonneg
+    have hrqn_pos : 0 < r * (qn : ℤ) := by
+      linarith
+    have hrpos : 0 < r := by
+      by_contra hrnot
+      have hrnonpos : r ≤ 0 := le_of_not_gt hrnot
+      have hprod_nonpos : r * (qn : ℤ) ≤ 0 :=
+        mul_nonpos_of_nonpos_of_nonneg hrnonpos hqnZpos.le
+      linarith
+    have hrge1 : (1 : ℤ) ≤ r := by omega
+    have hrge1R : (1 : ℝ) ≤ (r : ℝ) := by exact_mod_cast hrge1
+    have hsR_nonpos : (s : ℝ) ≤ 0 := by exact_mod_cast hs_nonpos
+    have hnegterm_nonneg : 0 ≤ -(s : ℝ) * β :=
+      mul_nonneg (neg_nonneg.mpr hsR_nonpos) hβpos.le
+    have hexpr_ge : 1 ≤ (r : ℝ) - (s : ℝ) * β := by
+      nlinarith
+    exact le_trans hexpr_ge (le_abs_self _)
+  · have hspos : 0 < s := lt_of_not_ge hs_nonpos
+    have hsge1 : (1 : ℤ) ≤ s := by omega
+    have hright_nonpos : (1 - s) * (qp : ℤ) ≤ 0 := by
+      have hones_nonpos : 1 - s ≤ 0 := by omega
+      exact mul_nonpos_of_nonpos_of_nonneg hones_nonpos hqpZnonneg
+    have hineq :
+        (r - (A : ℤ)) * (qn : ℤ) < (1 - s) * (qp : ℤ) := by
+      nlinarith
+    have hmul_neg : (r - (A : ℤ)) * (qn : ℤ) < 0 :=
+      lt_of_lt_of_le hineq hright_nonpos
+    have hr_lt_A : r < (A : ℤ) := by
+      by_contra hnot
+      have hdiff_nonneg : 0 ≤ r - (A : ℤ) := by omega
+      have hprod_nonneg :
+          0 ≤ (r - (A : ℤ)) * (qn : ℤ) :=
+        mul_nonneg hdiff_nonneg hqnZpos.le
+      linarith
+    have hr_le_A_sub_one : r ≤ (A : ℤ) - 1 := by omega
+    have hsRge1 : (1 : ℝ) ≤ (s : ℝ) := by exact_mod_cast hsge1
+    have hr_le_A_sub_one_R : (r : ℝ) ≤ (A : ℝ) - 1 := by
+      exact_mod_cast hr_le_A_sub_one
+    have hβ_le_sβ : β ≤ (s : ℝ) * β := by
+      calc
+        β = 1 * β := by ring
+        _ ≤ (s : ℝ) * β :=
+          mul_le_mul_of_nonneg_right hsRge1 hβpos.le
+    have hgt : 1 < (s : ℝ) * β - (r : ℝ) := by
+      nlinarith
+    have hnonpos : (r : ℝ) - (s : ℝ) * β ≤ 0 := by
+      linarith
+    rw [abs_of_nonpos hnonpos]
+    linarith
+
+/-- Best approximation of the second kind for project-local simple continued
+fractions: no positive denominator below `qₙ₊₁` gives smaller integer error
+than the `n`-th convergent. -/
+theorem convergent_best_approx_second_kind
+    {α : ℝ} {a : ℕ → ℕ}
+    (hcf : IsSimpleCFExpansion α a)
+    (n q : ℕ) (p : ℤ)
+    (hqpos : 0 < q)
+    (hqhi : q < continuantDen a (n + 1)) :
+    |(q : ℝ) * α - (p : ℝ)| ≥
+      |(continuantDen a n : ℝ) * α -
+        (continuantNum a n : ℝ)| := by
+  rcases hcf with ⟨hpos, htendsto, htails⟩
+  have hcf' : IsSimpleCFExpansion α a := ⟨hpos, htendsto, htails⟩
+  rcases prev_error_eq_neg_tail_mul_error hcf' n with
+    ⟨β, hβgt, _, hprev_rel⟩
+  rcases exists_convergent_zbasis_coeffs a n p (q : ℤ) with
+    ⟨r, s, hp, hq⟩
+  let E : ℝ :=
+    (continuantDen a n : ℝ) * α - (continuantNum a n : ℝ)
+  let Ep : ℝ :=
+    (continuantDenPrev a n : ℝ) * α - (continuantNumPrev a n : ℝ)
+  have hqposZ : (0 : ℤ) < (q : ℤ) := by exact_mod_cast hqpos
+  have hqhiZ : (q : ℤ) < (continuantDen a (n + 1) : ℤ) := by
+    exact_mod_cast hqhi
+  have hq_coeff_pos :
+      0 <
+        r * (continuantDen a n : ℤ) +
+          s * (continuantDenPrev a n : ℤ) := by
+    simpa [hq] using hqposZ
+  have hnext_eqZ :
+      (continuantDen a (n + 1) : ℤ) =
+        (a (n + 1) : ℤ) * (continuantDen a n : ℤ) +
+          (continuantDenPrev a n : ℤ) := by
+    rw [continuantDen_succ]
+    norm_num
+  have hq_coeff_hi :
+      r * (continuantDen a n : ℤ) +
+          s * (continuantDenPrev a n : ℤ) <
+        (a (n + 1) : ℤ) * (continuantDen a n : ℤ) +
+          (continuantDenPrev a n : ℤ) := by
+    simpa [hq, hnext_eqZ] using hqhiZ
+  have hqnpos : 0 < continuantDen a n :=
+    continuantDen_pos_of_partials a hpos n
+  have hcoeff :
+      1 ≤ |(r : ℝ) - (s : ℝ) * β| :=
+    abs_int_coeff_sub_tail_ge_one_of_den_lt_qsucc
+      (hApos := hpos n) (hβA := hβgt) (hqn := hqnpos)
+      hq_coeff_pos hq_coeff_hi
+  have hpR :
+      (p : ℝ) =
+        (r : ℝ) * (continuantNum a n : ℝ) +
+          (s : ℝ) * (continuantNumPrev a n : ℝ) := by
+    exact_mod_cast hp
+  have hqR :
+      (q : ℝ) =
+        (r : ℝ) * (continuantDen a n : ℝ) +
+          (s : ℝ) * (continuantDenPrev a n : ℝ) := by
+    exact_mod_cast hq
+  have hlin :
+      (q : ℝ) * α - (p : ℝ) =
+        (r : ℝ) * E + (s : ℝ) * Ep := by
+    dsimp [E, Ep]
+    rw [hpR, hqR]
+    ring
+  have hprev_rel' : Ep = -β * E := by
+    simpa [E, Ep] using hprev_rel
+  have hmain :
+      (q : ℝ) * α - (p : ℝ) =
+        ((r : ℝ) - (s : ℝ) * β) * E := by
+    rw [hlin, hprev_rel']
+    ring
+  have habs :
+      |(q : ℝ) * α - (p : ℝ)| =
+        |(r : ℝ) - (s : ℝ) * β| * |E| := by
+    rw [hmain, abs_mul]
+  change |E| ≤ |(q : ℝ) * α - (p : ℝ)|
+  rw [habs]
+  simpa [one_mul] using
+    mul_le_mul_of_nonneg_right hcoeff (abs_nonneg E)
+
+/-- Rational lower bound between consecutive convergent denominators. -/
+theorem rational_approx_lower_bound_between_convergents
+    {α : ℝ} {a : ℕ → ℕ}
+    (hcf : IsSimpleCFExpansion α a)
+    (n q : ℕ) (p : ℤ)
+    (_hqlo : continuantDen a n ≤ q)
+    (hqhi : q < continuantDen a (n + 1))
+    (hqpos : 0 < q) :
+    |α - (p : ℝ) / (q : ℝ)| ≥
+      1 / (2 * (q : ℝ) * (continuantDen a (n + 1) : ℝ)) :=
+  rational_approx_lower_bound_between_convergents_of_best
+    hcf n q p hqpos
+    (convergent_best_approx_second_kind hcf n q p hqpos hqhi)
 
 private theorem inv_sq_continuantDen_tendsto_zero
     {a : ℕ → ℕ}
