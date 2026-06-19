@@ -47,6 +47,64 @@ def CFBlockNumerator (a : ℕ → ℕ) (j t : ℕ) : ℕ :=
 def CFBlockDenominator (a : ℕ → ℕ) (j t : ℕ) : ℕ :=
   continuantDenPrev a j + t * continuantDen a j
 
+/-- A set of natural numbers has nondecreasing gaps between consecutive
+members.  This avoids choosing an explicit increasing enumeration
+`s = {a₁ < a₂ < ...}`. -/
+def SetConsecutiveGapsNondecreasing (s : Set ℕ) : Prop :=
+  ∀ a b c : ℕ,
+    a ∈ s → b ∈ s → c ∈ s →
+      a < b → b < c →
+        (∀ x : ℕ, x ∈ s → a < x → x < b → False) →
+          (∀ x : ℕ, x ∈ s → b < x → x < c → False) →
+            b - a ≤ c - b
+
+/-- Gap-monotonicity target for `A_r`. -/
+def AGapsNondecreasing (r : ℝ) : Prop :=
+  SetConsecutiveGapsNondecreasing (A r)
+
+/-- A valid parity-selected index in the canonical continued-fraction
+principal/intermediate path. -/
+def CanonicalOddCFIndex (a : ℕ → ℕ) (j t : ℕ) : Prop :=
+  1 ≤ t ∧ t ≤ a (j + 1) ∧ Odd (CFBlockNumerator a j t)
+
+/-- Lexicographic order on block indices `(j,t)`, matching the natural order
+of the unfiltered denominator path when partial quotients are positive. -/
+def CFBlockIndexLt (j t k s : ℕ) : Prop :=
+  j < k ∨ (j = k ∧ t < s)
+
+/-- Consecutive parity-selected indices in the canonical denominator path. -/
+def ConsecutiveCanonicalOddCFIndices
+    (a : ℕ → ℕ) (j t k s : ℕ) : Prop :=
+  CanonicalOddCFIndex a j t ∧
+    CanonicalOddCFIndex a k s ∧
+      CFBlockIndexLt j t k s ∧
+        ∀ l u : ℕ,
+          CanonicalOddCFIndex a l u →
+            CFBlockIndexLt j t l u →
+              CFBlockIndexLt l u k s →
+                False
+
+/-- Short alias for consecutive selected continued-fraction path indices. -/
+abbrev ConsecutiveSelected :=
+  ConsecutiveCanonicalOddCFIndices
+
+/-- `s` is the first parity-selected index in block `k`. -/
+def IsFirstSelectedInBlock (a : ℕ → ℕ) (k s : ℕ) : Prop :=
+  CanonicalOddCFIndex a k s ∧
+    ∀ u : ℕ, CanonicalOddCFIndex a k u → u < s → False
+
+/-- Gap between two canonical continued-fraction block denominators. -/
+def CanonicalOddCFGap (a : ℕ → ℕ) (j t k s : ℕ) : ℕ :=
+  CFBlockDenominator a k s - CFBlockDenominator a j t
+
+/-- The finite combinatorial core of the pasted proof: consecutive gaps in
+the parity-selected denominator path are nondecreasing. -/
+def CanonicalOddDenominatorGapsNondecreasing (a : ℕ → ℕ) : Prop :=
+  ∀ j t k s l u : ℕ,
+    ConsecutiveCanonicalOddCFIndices a j t k s →
+      ConsecutiveCanonicalOddCFIndices a k s l u →
+        CanonicalOddCFGap a j t k s ≤ CanonicalOddCFGap a k s l u
+
 /-- The parity-selected part of the `j`-th denominator block. -/
 def canonicalOddBlock (a : ℕ → ℕ) (j : ℕ) : Finset ℕ :=
   (Finset.Icc 1 (a (j + 1))).filter fun t : ℕ =>
@@ -814,10 +872,718 @@ lemma CFBlockNumerator_endpoint (a : ℕ → ℕ) (j : ℕ) :
       simp [CFBlockNumerator, continuantNum, continuantNumPrev, Nat.add_comm,
         show 1 + (j + 1) = j + 2 by omega]
 
+/-- Consecutive denominators inside the same continued-fraction block differ
+by the current principal denominator `q_j`. -/
+lemma CFBlockDenominator_succ (a : ℕ → ℕ) (j t : ℕ) :
+    CFBlockDenominator a j (t + 1) =
+      CFBlockDenominator a j t + continuantDen a j := by
+  unfold CFBlockDenominator
+  ring
+
+/-- Consecutive numerators inside the same continued-fraction block differ by
+the current principal numerator `p_j`. -/
+lemma CFBlockNumerator_succ (a : ℕ → ℕ) (j t : ℕ) :
+    CFBlockNumerator a j (t + 1) =
+      CFBlockNumerator a j t + continuantNum a j := by
+  unfold CFBlockNumerator
+  ring
+
+/-- The first denominator in the next block is `q_j + q_{j+1}`. -/
+lemma CFBlockDenominator_next_block_first (a : ℕ → ℕ) (j : ℕ) :
+    CFBlockDenominator a (j + 1) 1 =
+      continuantDen a j + continuantDen a (j + 1) := by
+  simp [CFBlockDenominator, continuantDenPrev]
+
+/-- The gap from the endpoint of block `j` to the first denominator in block
+`j + 1` is again `q_j`. -/
+lemma CFBlockDenominator_boundary_succ (a : ℕ → ℕ) (j : ℕ) :
+    CFBlockDenominator a (j + 1) 1 =
+      CFBlockDenominator a j (a (j + 1)) + continuantDen a j := by
+  rw [CFBlockDenominator_next_block_first, CFBlockDenominator_endpoint]
+  rw [Nat.add_comm]
+
+/-- If `p_{j-1}` is odd and `p_j` is even, every index in the block is
+parity-selected. -/
+lemma odd_CFBlockNumerator_of_prev_odd_curr_even
+    {a : ℕ → ℕ} {j t : ℕ}
+    (hprev : Odd (continuantNumPrev a j))
+    (hcurr : Even (continuantNum a j)) :
+    Odd (CFBlockNumerator a j t) := by
+  unfold CFBlockNumerator
+  exact hprev.add_even (hcurr.mul_left t)
+
+/-- If `p_{j-1}` is even and `p_j` is odd, the selected indices in the block
+are exactly the odd indices. -/
+lemma odd_CFBlockNumerator_iff_of_prev_even_curr_odd
+    {a : ℕ → ℕ} {j t : ℕ}
+    (hprev : Even (continuantNumPrev a j))
+    (hcurr : Odd (continuantNum a j)) :
+    Odd (CFBlockNumerator a j t) ↔ Odd t := by
+  constructor
+  · intro hodd
+    rcases Nat.even_or_odd t with htEven | htOdd
+    · exfalso
+      have hblockEven : Even (CFBlockNumerator a j t) := by
+        unfold CFBlockNumerator
+        exact hprev.add (htEven.mul_right (continuantNum a j))
+      exact (Nat.not_even_iff_odd.mpr hodd) hblockEven
+    · exact htOdd
+  · intro htOdd
+    unfold CFBlockNumerator
+    exact hprev.add_odd (htOdd.mul hcurr)
+
+/-- If both `p_{j-1}` and `p_j` are odd, the selected indices in the block are
+exactly the even indices. -/
+lemma odd_CFBlockNumerator_iff_of_prev_odd_curr_odd
+    {a : ℕ → ℕ} {j t : ℕ}
+    (hprev : Odd (continuantNumPrev a j))
+    (hcurr : Odd (continuantNum a j)) :
+    Odd (CFBlockNumerator a j t) ↔ Even t := by
+  constructor
+  · intro hodd
+    rcases Nat.even_or_odd t with htEven | htOdd
+    · exact htEven
+    · exfalso
+      have hblockEven : Even (CFBlockNumerator a j t) := by
+        unfold CFBlockNumerator
+        exact hprev.add_odd (htOdd.mul hcurr)
+      exact (Nat.not_even_iff_odd.mpr hodd) hblockEven
+  · intro htEven
+    unfold CFBlockNumerator
+    exact hprev.add_even (htEven.mul_right (continuantNum a j))
+
+lemma exists_canonicalOddCFIndex_or_emptyBlock
+    (a : ℕ → ℕ)
+    (hpos : ∀ j : ℕ, 0 < a (j + 1))
+    (j : ℕ) :
+    (∃ t : ℕ, CanonicalOddCFIndex a j t) ∨
+      (a (j + 1) = 1 ∧
+        Odd (continuantNumPrev a j) ∧ Odd (continuantNum a j)) := by
+  rcases Nat.even_or_odd (continuantNumPrev a j) with hprevEven | hprevOdd
+  · rcases Nat.even_or_odd (continuantNum a j) with hcurrEven | hcurrOdd
+    · exact False.elim
+        (continuantNumPrev_not_even_and_even a j ⟨hprevEven, hcurrEven⟩)
+    · left
+      refine ⟨1, ?_, ?_, ?_⟩
+      · norm_num
+      · exact hpos j
+      · exact (odd_CFBlockNumerator_iff_of_prev_even_curr_odd
+          hprevEven hcurrOdd).2 (by norm_num)
+  · rcases Nat.even_or_odd (continuantNum a j) with hcurrEven | hcurrOdd
+    · left
+      refine ⟨1, ?_, ?_, ?_⟩
+      · norm_num
+      · exact hpos j
+      · exact odd_CFBlockNumerator_of_prev_odd_curr_even hprevOdd hcurrEven
+    · by_cases hb : 2 ≤ a (j + 1)
+      · left
+        refine ⟨2, ?_, hb, ?_⟩
+        · norm_num
+        · exact (odd_CFBlockNumerator_iff_of_prev_odd_curr_odd
+            hprevOdd hcurrOdd).2 (by norm_num)
+      · right
+        have hb1 : a (j + 1) = 1 := by
+          have hge1 : 1 ≤ a (j + 1) := hpos j
+          omega
+        exact ⟨hb1, hprevOdd, hcurrOdd⟩
+
+lemma canonicalOddCFIndex_next_of_emptyBlock
+    (a : ℕ → ℕ)
+    (hpos : ∀ j : ℕ, 0 < a (j + 1))
+    {j : ℕ}
+    (hb : a (j + 1) = 1)
+    (hprev : Odd (continuantNumPrev a j))
+    (hcurr : Odd (continuantNum a j)) :
+    CanonicalOddCFIndex a (j + 1) 1 := by
+  refine ⟨by norm_num, hpos (j + 1), ?_⟩
+  have hnextEven : Even (continuantNum a (j + 1)) := by
+    rw [continuantNum_succ_eq, hb]
+    simpa [Nat.add_comm] using hcurr.add_odd hprev
+  exact odd_CFBlockNumerator_of_prev_odd_curr_even
+    (a := a) (j := j + 1) (t := 1)
+    (by simpa [continuantNumPrev] using hcurr) hnextEven
+
+lemma consecutiveCanonicalOddCFIndices_block_le_add_two
+    {a : ℕ → ℕ}
+    (hpos : ∀ j : ℕ, 0 < a (j + 1))
+    {j t k s : ℕ}
+    (hconsec : ConsecutiveCanonicalOddCFIndices a j t k s) :
+    k ≤ j + 2 := by
+  rcases hconsec with ⟨_hjt, _hks, hlt, hnone⟩
+  by_contra hnot
+  have hj2lt : j + 2 < k := by
+    rcases hlt with hjk | ⟨hjk, hts⟩
+    · omega
+    · subst k
+      omega
+  rcases exists_canonicalOddCFIndex_or_emptyBlock a hpos (j + 1) with
+    ⟨u, hu⟩ | ⟨hb, hprev, hcurr⟩
+  · exact hnone (j + 1) u hu
+      (Or.inl (by omega))
+      (Or.inl (by omega))
+  · have hnext : CanonicalOddCFIndex a (j + 2) 1 :=
+      canonicalOddCFIndex_next_of_emptyBlock
+        (a := a) hpos hb hprev hcurr
+    exact hnone (j + 2) 1 hnext
+      (Or.inl (by omega))
+      (Or.inl (by omega))
+
+lemma emptyBlock_of_consecutiveCanonicalOddCFIndices_skip_two
+    {a : ℕ → ℕ}
+    (hpos : ∀ j : ℕ, 0 < a (j + 1))
+    {j t k s : ℕ}
+    (hconsec : ConsecutiveCanonicalOddCFIndices a j t k s)
+    (hk : k = j + 2) :
+    a (j + 2) = 1 ∧
+      Odd (continuantNumPrev a (j + 1)) ∧
+        Odd (continuantNum a (j + 1)) := by
+  rcases hconsec with ⟨_hjt, _hks, _hlt, hnone⟩
+  rcases exists_canonicalOddCFIndex_or_emptyBlock a hpos (j + 1) with
+    ⟨u, hu⟩ | hempty
+  · have hbetween_right : CFBlockIndexLt (j + 1) u k s := by
+      subst k
+      exact Or.inl (by omega)
+    exact False.elim
+      (hnone (j + 1) u hu (Or.inl (by omega)) hbetween_right)
+  · exact hempty
+
+lemma canonicalOddCFIndex_endpoint_of_next_emptyBlock
+    {a : ℕ → ℕ}
+    (hpos : ∀ j : ℕ, 0 < a (j + 1))
+    {j : ℕ}
+    (hempty :
+      a (j + 2) = 1 ∧
+        Odd (continuantNumPrev a (j + 1)) ∧
+          Odd (continuantNum a (j + 1))) :
+    CanonicalOddCFIndex a j (a (j + 1)) := by
+  refine ⟨hpos j, le_rfl, ?_⟩
+  rw [CFBlockNumerator_endpoint]
+  exact hempty.2.2
+
+lemma isFirstSelectedInBlock_eq_one_or_two
+    {a : ℕ → ℕ} {k s : ℕ}
+    (hfirst : IsFirstSelectedInBlock a k s) :
+    s = 1 ∨ s = 2 := by
+  rcases hfirst with ⟨hs, hminimal⟩
+  rcases hs with ⟨hs1, hsle, hsOdd⟩
+  rcases Nat.even_or_odd (continuantNumPrev a k) with hprevEven | hprevOdd
+  · rcases Nat.even_or_odd (continuantNum a k) with hcurrEven | hcurrOdd
+    · exact False.elim
+        (continuantNumPrev_not_even_and_even a k ⟨hprevEven, hcurrEven⟩)
+    · left
+      have hsOddIndex : Odd s :=
+        (odd_CFBlockNumerator_iff_of_prev_even_curr_odd
+          hprevEven hcurrOdd).1 hsOdd
+      rcases hsOddIndex with ⟨m, hm⟩
+      by_contra hsne
+      have h1lt : 1 < s := by omega
+      have hsel1 : CanonicalOddCFIndex a k 1 := by
+        refine ⟨by norm_num, ?_, ?_⟩
+        · omega
+        · exact (odd_CFBlockNumerator_iff_of_prev_even_curr_odd
+            hprevEven hcurrOdd).2 (by norm_num)
+      exact hminimal 1 hsel1 h1lt
+  · rcases Nat.even_or_odd (continuantNum a k) with hcurrEven | hcurrOdd
+    · left
+      by_contra hsne
+      have h1lt : 1 < s := by omega
+      have hsel1 : CanonicalOddCFIndex a k 1 := by
+        refine ⟨by norm_num, ?_, ?_⟩
+        · omega
+        · exact odd_CFBlockNumerator_of_prev_odd_curr_even hprevOdd hcurrEven
+      exact hminimal 1 hsel1 h1lt
+    · right
+      have hsEven : Even s :=
+        (odd_CFBlockNumerator_iff_of_prev_odd_curr_odd
+          hprevOdd hcurrOdd).1 hsOdd
+      rcases hsEven with ⟨m, hm⟩
+      by_contra hsne
+      have h2lt : 2 < s := by
+        have hsne1 : s ≠ 1 := by
+          intro hsEq
+          omega
+        omega
+      have hsel2 : CanonicalOddCFIndex a k 2 := by
+        refine ⟨by norm_num, ?_, ?_⟩
+        · omega
+        · exact (odd_CFBlockNumerator_iff_of_prev_odd_curr_odd
+            hprevOdd hcurrOdd).2 (by norm_num)
+      exact hminimal 2 hsel2 h2lt
+
+lemma odd_num_pair_of_isFirstSelectedInBlock_eq_two
+    {a : ℕ → ℕ} {k : ℕ}
+    (hfirst : IsFirstSelectedInBlock a k 2) :
+    Odd (continuantNumPrev a k) ∧ Odd (continuantNum a k) := by
+  rcases hfirst with ⟨hsel2, hminimal⟩
+  rcases hsel2 with ⟨_h21, h2le, _h2odd⟩
+  rcases Nat.even_or_odd (continuantNumPrev a k) with hprevEven | hprevOdd
+  · rcases Nat.even_or_odd (continuantNum a k) with hcurrEven | hcurrOdd
+    · exact False.elim
+        (continuantNumPrev_not_even_and_even a k ⟨hprevEven, hcurrEven⟩)
+    · have hsel1 : CanonicalOddCFIndex a k 1 := by
+        refine ⟨by norm_num, ?_, ?_⟩
+        · omega
+        · exact (odd_CFBlockNumerator_iff_of_prev_even_curr_odd
+            hprevEven hcurrOdd).2 (by norm_num)
+      exact False.elim (hminimal 1 hsel1 (by norm_num))
+  · rcases Nat.even_or_odd (continuantNum a k) with hcurrEven | hcurrOdd
+    · have hsel1 : CanonicalOddCFIndex a k 1 := by
+        refine ⟨by norm_num, ?_, ?_⟩
+        · omega
+        · exact odd_CFBlockNumerator_of_prev_odd_curr_even hprevOdd hcurrEven
+      exact False.elim (hminimal 1 hsel1 (by norm_num))
+    · exact ⟨hprevOdd, hcurrOdd⟩
+
+lemma even_index_of_isFirstSelectedInBlock_eq_two
+    {a : ℕ → ℕ} {k u : ℕ}
+    (hfirst : IsFirstSelectedInBlock a k 2)
+    (hu : CanonicalOddCFIndex a k u) :
+    Even u := by
+  rcases hfirst with ⟨hsel2, hminimal⟩
+  rcases hsel2 with ⟨_h21, h2le, h2odd⟩
+  rcases hu with ⟨_hu1, _hule, huodd⟩
+  rcases Nat.even_or_odd (continuantNumPrev a k) with hprevEven | hprevOdd
+  · rcases Nat.even_or_odd (continuantNum a k) with hcurrEven | hcurrOdd
+    · exact False.elim
+        (continuantNumPrev_not_even_and_even a k ⟨hprevEven, hcurrEven⟩)
+    · have hsel1 : CanonicalOddCFIndex a k 1 := by
+        refine ⟨by norm_num, ?_, ?_⟩
+        · omega
+        · exact (odd_CFBlockNumerator_iff_of_prev_even_curr_odd
+            hprevEven hcurrOdd).2 (by norm_num)
+      exact False.elim (hminimal 1 hsel1 (by norm_num))
+  · rcases Nat.even_or_odd (continuantNum a k) with hcurrEven | hcurrOdd
+    · have hsel1 : CanonicalOddCFIndex a k 1 := by
+        refine ⟨by norm_num, ?_, ?_⟩
+        · omega
+        · exact odd_CFBlockNumerator_of_prev_odd_curr_even hprevOdd hcurrEven
+      exact False.elim (hminimal 1 hsel1 (by norm_num))
+    · exact (odd_CFBlockNumerator_iff_of_prev_odd_curr_odd
+        hprevOdd hcurrOdd).1 huodd
+
 lemma mem_canonicalOddBlock_iff {a : ℕ → ℕ} {j t : ℕ} :
     t ∈ canonicalOddBlock a j ↔
       1 ≤ t ∧ t ≤ a (j + 1) ∧ Odd (CFBlockNumerator a j t) := by
   simp [canonicalOddBlock, and_assoc]
+
+lemma canonicalOddCFIndex_iff_mem_canonicalOddBlock {a : ℕ → ℕ} {j t : ℕ} :
+    CanonicalOddCFIndex a j t ↔ t ∈ canonicalOddBlock a j := by
+  rw [mem_canonicalOddBlock_iff]
+  rfl
+
+lemma canonicalOddCFGap_same_block
+    (a : ℕ → ℕ) {j t s : ℕ} (hts : t ≤ s) :
+    CanonicalOddCFGap a j t j s =
+      (s - t) * continuantDen a j := by
+  unfold CanonicalOddCFGap CFBlockDenominator
+  let d : ℕ := s - t
+  have hs : s = t + d := by
+    dsimp [d]
+    omega
+  rw [hs]
+  rw [Nat.add_mul]
+  rw [← Nat.add_assoc]
+  rw [Nat.add_sub_cancel_left]
+  dsimp [d]
+  rw [Nat.add_sub_cancel_left]
+
+lemma canonicalOddCFGap_same_block_succ
+    (a : ℕ → ℕ) (j t : ℕ) :
+    CanonicalOddCFGap a j t j (t + 1) = continuantDen a j := by
+  rw [canonicalOddCFGap_same_block a (Nat.le_succ t)]
+  simp
+
+lemma canonicalOddCFGap_same_block_add_two
+    (a : ℕ → ℕ) (j t : ℕ) :
+    CanonicalOddCFGap a j t j (t + 2) = 2 * continuantDen a j := by
+  rw [canonicalOddCFGap_same_block a (by omega : t ≤ t + 2)]
+  simp [Nat.mul_comm]
+
+lemma canonicalOddCFGap_boundary_endpoint_to_first
+    (a : ℕ → ℕ) (j : ℕ) :
+    CanonicalOddCFGap a j (a (j + 1)) (j + 1) 1 =
+      continuantDen a j := by
+  unfold CanonicalOddCFGap
+  rw [CFBlockDenominator_boundary_succ]
+  omega
+
+lemma canonicalOddCFGap_boundary_pred_endpoint_to_first
+    (a : ℕ → ℕ) {j : ℕ} (hb : 0 < a (j + 1)) :
+    CanonicalOddCFGap a j (a (j + 1) - 1) (j + 1) 1 =
+      2 * continuantDen a j := by
+  unfold CanonicalOddCFGap
+  have hsucc := CFBlockDenominator_succ a j (a (j + 1) - 1)
+  have hpred : a (j + 1) - 1 + 1 = a (j + 1) := by omega
+  rw [hpred] at hsucc
+  have hboundary := CFBlockDenominator_boundary_succ a j
+  rw [hsucc] at hboundary
+  rw [hboundary]
+  omega
+
+lemma canonicalOddCFGap_endpoint_to_after_next_first
+    (a : ℕ → ℕ) (j : ℕ) :
+    CanonicalOddCFGap a j (a (j + 1)) (j + 2) 1 =
+      continuantDen a (j + 2) := by
+  unfold CanonicalOddCFGap
+  rw [CFBlockDenominator_endpoint]
+  have hfirst :
+      CFBlockDenominator a (j + 2) 1 =
+        continuantDen a (j + 1) + continuantDen a (j + 2) := by
+    simpa [Nat.add_assoc] using CFBlockDenominator_next_block_first a (j + 1)
+  rw [hfirst]
+  omega
+
+lemma incoming_gap_le_first_scale
+    {a : ℕ → ℕ}
+    (hpos : ∀ j : ℕ, 0 < a (j + 1))
+    {j t k s : ℕ}
+    (hprev : ConsecutiveSelected a j t k s)
+    (hfirst : IsFirstSelectedInBlock a k s) :
+    CanonicalOddCFGap a j t k s ≤ s * continuantDen a k := by
+  rcases hprev with ⟨hjt, hks, hlt, hnone⟩
+  rcases hlt with hjk | ⟨hjk, hts⟩
+  · have hkcases : k = j + 1 ∨ k = j + 2 := by
+      have hle := consecutiveCanonicalOddCFIndices_block_le_add_two
+        (a := a) hpos ⟨hjt, hks, Or.inl hjk, hnone⟩
+      omega
+    rcases hkcases with hk | hk
+    · subst k
+      unfold CanonicalOddCFGap CFBlockDenominator
+      have hprev_succ :
+          continuantDenPrev a (j + 1) = continuantDen a j := by
+        simp [continuantDenPrev]
+      rw [hprev_succ]
+      have hq_le :
+          continuantDen a j ≤
+            continuantDenPrev a j + t * continuantDen a j := by
+        have htq : 1 * continuantDen a j ≤ t * continuantDen a j :=
+          Nat.mul_le_mul_right _ hjt.1
+        omega
+      exact Nat.sub_le_iff_le_add.mpr (by omega)
+    · subst k
+      have hempty :
+          a (j + 2) = 1 ∧
+            Odd (continuantNumPrev a (j + 1)) ∧
+              Odd (continuantNum a (j + 1)) :=
+        emptyBlock_of_consecutiveCanonicalOddCFIndices_skip_two
+          (a := a) hpos ⟨hjt, hks, Or.inl (by omega), hnone⟩ rfl
+      have hend : CanonicalOddCFIndex a j (a (j + 1)) :=
+        canonicalOddCFIndex_endpoint_of_next_emptyBlock hpos hempty
+      have ht_end : t = a (j + 1) := by
+        by_contra htne
+        have htlt : t < a (j + 1) :=
+          lt_of_le_of_ne hjt.2.1 htne
+        exact hnone j (a (j + 1)) hend
+          (Or.inr ⟨rfl, htlt⟩)
+          (Or.inl (by omega))
+      have hfirst_after_empty :
+          CanonicalOddCFIndex a (j + 2) 1 :=
+        canonicalOddCFIndex_next_of_emptyBlock
+          (a := a) hpos hempty.1 hempty.2.1 hempty.2.2
+      have hs_one : s = 1 := by
+        rcases hfirst with ⟨_hs, hmin⟩
+        by_contra hsne
+        have h1lt : 1 < s := by
+          exact lt_of_le_of_ne hks.1 (by
+            intro h
+            exact hsne h.symm)
+        exact hmin 1 hfirst_after_empty h1lt
+      subst t
+      subst s
+      rw [canonicalOddCFGap_endpoint_to_after_next_first]
+      simp
+  · subst k
+    rw [canonicalOddCFGap_same_block a (Nat.le_of_lt hts)]
+    have hle : s - t ≤ s := Nat.sub_le _ _
+    exact Nat.mul_le_mul_right _ hle
+
+lemma CFBlockDenominator_le_endpoint
+    (a : ℕ → ℕ) {j t : ℕ}
+    (ht : t ≤ a (j + 1)) :
+    CFBlockDenominator a j t ≤ continuantDen a (j + 1) := by
+  rw [← CFBlockDenominator_endpoint a j]
+  unfold CFBlockDenominator
+  exact Nat.add_le_add_left
+    (Nat.mul_le_mul_right (continuantDen a j) ht)
+    (continuantDenPrev a j)
+
+lemma CFBlockDenominator_next_block_ge_first
+    (a : ℕ → ℕ) {j u : ℕ}
+    (hu : 1 ≤ u) :
+    continuantDen a j + continuantDen a (j + 1) ≤
+      CFBlockDenominator a (j + 1) u := by
+  unfold CFBlockDenominator
+  have hprev :
+      continuantDenPrev a (j + 1) = continuantDen a j := by
+    simp [continuantDenPrev]
+  rw [hprev]
+  have hmul :
+      1 * continuantDen a (j + 1) ≤
+        u * continuantDen a (j + 1) :=
+    Nat.mul_le_mul_right _ hu
+  omega
+
+lemma first_scale_le_outgoing_gap
+    {a : ℕ → ℕ}
+    (hpos : ∀ j : ℕ, 0 < a (j + 1))
+    {k s l u : ℕ}
+    (hnext : ConsecutiveSelected a k s l u)
+    (hfirst : IsFirstSelectedInBlock a k s) :
+    s * continuantDen a k ≤ CanonicalOddCFGap a k s l u := by
+  rcases hnext with ⟨hks, hlu, hlt, hnone⟩
+  have hs_cases : s = 1 ∨ s = 2 :=
+    isFirstSelectedInBlock_eq_one_or_two hfirst
+  rcases hlt with hkl | ⟨hkl, hsu⟩
+  · have hl_cases : l = k + 1 ∨ l = k + 2 := by
+      have hle := consecutiveCanonicalOddCFIndices_block_le_add_two
+        (a := a) hpos ⟨hks, hlu, Or.inl hkl, hnone⟩
+      omega
+    rcases hl_cases with hl | hl
+    · subst l
+      rcases hs_cases with hs | hs
+      · subst s
+        unfold CanonicalOddCFGap CFBlockDenominator
+        have hprev :
+            continuantDenPrev a (k + 1) = continuantDen a k := by
+          simp [continuantDenPrev]
+        rw [hprev]
+        have hqprev_le_q :
+            continuantDenPrev a k ≤ continuantDen a k :=
+          continuantDenPrev_le_continuantDen_of_partials_pos a hpos k
+        have hq_le_uq :
+            continuantDen a (k + 1) ≤
+              u * continuantDen a (k + 1) := by
+          simpa using
+            (Nat.mul_le_mul_right (continuantDen a (k + 1)) hlu.1 :
+              1 * continuantDen a (k + 1) ≤
+                u * continuantDen a (k + 1))
+        have hqk_le_qsucc :
+            continuantDen a k ≤ continuantDen a (k + 1) :=
+          continuantDen_mono_of_partials_pos a hpos k
+        have hsub :
+          continuantDenPrev a k + 1 * continuantDen a k ≤
+            continuantDen a k + u * continuantDen a (k + 1) := by
+          rw [continuantDen_succ_eq]
+          have hq_le_aq :
+              1 * continuantDen a k ≤
+                a (k + 1) * continuantDen a k :=
+            Nat.mul_le_mul_right _ (hpos k)
+          have hleft_le_base :
+              continuantDenPrev a k + 1 * continuantDen a k ≤
+                a (k + 1) * continuantDen a k +
+                  continuantDenPrev a k := by
+            omega
+          have hmul :
+              1 * (a (k + 1) * continuantDen a k +
+                  continuantDenPrev a k) ≤
+                u * (a (k + 1) * continuantDen a k +
+                  continuantDenPrev a k) :=
+            Nat.mul_le_mul_right _ hlu.1
+          have hbase_le_u :
+              a (k + 1) * continuantDen a k + continuantDenPrev a k ≤
+                u * (a (k + 1) * continuantDen a k +
+                  continuantDenPrev a k) := by
+            simpa using hmul
+          exact hleft_le_base.trans
+            (hbase_le_u.trans (Nat.le_add_left _ _))
+        have hsum :
+            1 * continuantDen a k +
+                (continuantDenPrev a k + 1 * continuantDen a k) ≤
+              continuantDen a k + u * continuantDen a (k + 1) := by
+          rw [continuantDen_succ_eq]
+          have hq_le_aq :
+              1 * continuantDen a k ≤
+                a (k + 1) * continuantDen a k :=
+            Nat.mul_le_mul_right _ (hpos k)
+          have hleft_le_base :
+              continuantDenPrev a k + 1 * continuantDen a k ≤
+                a (k + 1) * continuantDen a k +
+                  continuantDenPrev a k := by
+            omega
+          have hmul :
+              1 * (a (k + 1) * continuantDen a k +
+                  continuantDenPrev a k) ≤
+                u * (a (k + 1) * continuantDen a k +
+                  continuantDenPrev a k) :=
+            Nat.mul_le_mul_right _ hlu.1
+          have hbase_le_u :
+              a (k + 1) * continuantDen a k + continuantDenPrev a k ≤
+                u * (a (k + 1) * continuantDen a k +
+                  continuantDenPrev a k) := by
+            simpa using hmul
+          simpa using
+            Nat.add_le_add_left (hleft_le_base.trans hbase_le_u)
+              (continuantDen a k)
+        exact (Nat.le_sub_iff_add_le hsub).mpr hsum
+      · subst s
+        have hfirst2 : IsFirstSelectedInBlock a k 2 := hfirst
+        have hodd_pair :
+            Odd (continuantNumPrev a k) ∧ Odd (continuantNum a k) :=
+          odd_num_pair_of_isFirstSelectedInBlock_eq_two hfirst2
+        have hcoeff_le_three : a (k + 1) ≤ 3 := by
+          by_contra hnot
+          have h4le : 4 ≤ a (k + 1) := by omega
+          have hsel4 : CanonicalOddCFIndex a k 4 := by
+            refine ⟨by norm_num, h4le, ?_⟩
+            exact (odd_CFBlockNumerator_iff_of_prev_odd_curr_odd
+              hodd_pair.1 hodd_pair.2).2 (by norm_num)
+          exact hnone k 4 hsel4
+            (Or.inr ⟨rfl, by norm_num⟩)
+            (Or.inl (by omega))
+        have hcoeff_cases : a (k + 1) = 2 ∨ a (k + 1) = 3 := by
+          have h2le : 2 ≤ a (k + 1) := hks.2.1
+          omega
+        rcases hcoeff_cases with ha2 | ha3
+        · have hprev_next :
+              continuantDenPrev a (k + 1) = continuantDen a k := by
+            simp [continuantDenPrev]
+          have hqsucc_eq :
+              continuantDen a (k + 1) =
+                2 * continuantDen a k + continuantDenPrev a k := by
+            rw [continuantDen_succ_eq, ha2]
+          have hprevOdd_next :
+              Odd (continuantNumPrev a (k + 1)) := by
+            simpa [continuantNumPrev] using hodd_pair.2
+          have hcurrOdd_next :
+              Odd (continuantNum a (k + 1)) := by
+            rw [continuantNum_succ_eq, ha2]
+            simpa [Nat.mul_comm, Nat.mul_left_comm, Nat.mul_assoc] using
+              (Even.mul_left even_two (continuantNum a k)).add_odd
+                hodd_pair.1
+          have huEven : Even u :=
+            (odd_CFBlockNumerator_iff_of_prev_odd_curr_odd
+              hprevOdd_next hcurrOdd_next).1 hlu.2.2
+          rcases huEven with ⟨m, hm⟩
+          have hu_ne_one : u ≠ 1 := by
+            intro hu1
+            omega
+          have hu2 : 2 ≤ u := by
+            cases u with
+            | zero =>
+                exact False.elim (Nat.not_succ_le_zero 0 hlu.1)
+            | succ u =>
+                cases u with
+                | zero =>
+                    exact False.elim (hu_ne_one rfl)
+                | succ u =>
+                    omega
+          unfold CanonicalOddCFGap CFBlockDenominator
+          rw [hprev_next, hqsucc_eq]
+          exact (Nat.le_sub_iff_add_le (by
+            have hmul :
+                2 * (2 * continuantDen a k + continuantDenPrev a k) ≤
+                  u * (2 * continuantDen a k + continuantDenPrev a k) :=
+              Nat.mul_le_mul_right _ hu2
+            have hleft :
+                continuantDenPrev a k + 2 * continuantDen a k ≤
+                  2 * (2 * continuantDen a k + continuantDenPrev a k) := by
+              omega
+            exact hleft.trans (hmul.trans (Nat.le_add_left _ _)) :
+              continuantDenPrev a k + 2 * continuantDen a k ≤
+              continuantDen a k +
+                u * (2 * continuantDen a k + continuantDenPrev a k))).mpr
+            (by
+              have hmul :
+                  2 * (2 * continuantDen a k + continuantDenPrev a k) ≤
+                    u * (2 * continuantDen a k + continuantDenPrev a k) :=
+                Nat.mul_le_mul_right _ hu2
+              have hleft :
+                  2 * continuantDen a k +
+                      (continuantDenPrev a k + 2 * continuantDen a k) ≤
+                    2 * (2 * continuantDen a k + continuantDenPrev a k) := by
+                omega
+              exact hleft.trans (hmul.trans (Nat.le_add_left _ _)))
+        · have hprev_next :
+              continuantDenPrev a (k + 1) = continuantDen a k := by
+            simp [continuantDenPrev]
+          have hqsucc_eq :
+              continuantDen a (k + 1) =
+                3 * continuantDen a k + continuantDenPrev a k := by
+            rw [continuantDen_succ_eq, ha3]
+          unfold CanonicalOddCFGap CFBlockDenominator
+          rw [hprev_next, hqsucc_eq]
+          exact (Nat.le_sub_iff_add_le (by
+            have hmul :
+                1 * (3 * continuantDen a k + continuantDenPrev a k) ≤
+                  u * (3 * continuantDen a k + continuantDenPrev a k) :=
+              Nat.mul_le_mul_right _ hlu.1
+            have hbase_le_u :
+                3 * continuantDen a k + continuantDenPrev a k ≤
+                  u * (3 * continuantDen a k + continuantDenPrev a k) := by
+              simpa using hmul
+            have hleft :
+                continuantDenPrev a k + 2 * continuantDen a k ≤
+                  continuantDen a k +
+                    (3 * continuantDen a k + continuantDenPrev a k) := by
+              omega
+            exact hleft.trans (Nat.add_le_add_left hbase_le_u _) :
+              continuantDenPrev a k + 2 * continuantDen a k ≤
+              continuantDen a k +
+                u * (3 * continuantDen a k + continuantDenPrev a k))).mpr
+            (by
+              have hmul :
+                  1 * (3 * continuantDen a k + continuantDenPrev a k) ≤
+                    u * (3 * continuantDen a k + continuantDenPrev a k) :=
+                Nat.mul_le_mul_right _ hlu.1
+              have hbase_le_u :
+                  3 * continuantDen a k + continuantDenPrev a k ≤
+                    u * (3 * continuantDen a k + continuantDenPrev a k) := by
+                simpa using hmul
+              have hleft :
+                  2 * continuantDen a k +
+                      (continuantDenPrev a k + 2 * continuantDen a k) ≤
+                    continuantDen a k +
+                      (3 * continuantDen a k + continuantDenPrev a k) := by
+                omega
+              exact hleft.trans (Nat.add_le_add_left hbase_le_u _))
+    · subst l
+      have hcurrent_le :
+          CFBlockDenominator a k s ≤ continuantDen a (k + 1) :=
+        CFBlockDenominator_le_endpoint a hks.2.1
+      have hnext_ge :
+          continuantDen a (k + 1) + continuantDen a (k + 2) ≤
+            CFBlockDenominator a (k + 2) u := by
+        simpa [Nat.add_assoc] using
+          CFBlockDenominator_next_block_ge_first (a := a) (j := k + 1) hlu.1
+      have hsle2 : s ≤ 2 := by
+        rcases hs_cases with hs | hs <;> omega
+      have hscale :
+          s * continuantDen a k ≤ continuantDen a (k + 2) := by
+        have hmul :
+            s * continuantDen a k ≤ 2 * continuantDen a k :=
+          Nat.mul_le_mul_right _ hsle2
+        exact hmul.trans
+          (two_mul_continuantDen_le_two_step_of_partials_pos a hpos k)
+      unfold CanonicalOddCFGap
+      exact (Nat.le_sub_iff_add_le (by omega :
+        CFBlockDenominator a k s ≤ CFBlockDenominator a (k + 2) u)).mpr (by
+        omega)
+  · subst l
+    rw [canonicalOddCFGap_same_block a (Nat.le_of_lt hsu)]
+    rcases hs_cases with hs | hs
+    · subst s
+      have hdiff : 1 ≤ u - 1 := by omega
+      exact Nat.mul_le_mul_right _ hdiff
+    · subst s
+      have hfirst2 : IsFirstSelectedInBlock a k 2 := hfirst
+      have huEven : Even u :=
+        even_index_of_isFirstSelectedInBlock_eq_two hfirst2 hlu
+      rcases huEven with ⟨m, hm⟩
+      have hdiff : 2 ≤ u - 2 := by
+        have hu_ne_two : u ≠ 2 := by omega
+        omega
+      exact Nat.mul_le_mul_right _ hdiff
+
+theorem boundary_gap_le_next_gap_of_middle_first
+    {a : ℕ → ℕ}
+    (hpos : ∀ j : ℕ, 0 < a (j + 1))
+    {j t k s l u : ℕ}
+    (hprev : ConsecutiveSelected a j t k s)
+    (hnext : ConsecutiveSelected a k s l u)
+    (hfirst : IsFirstSelectedInBlock a k s) :
+    CanonicalOddCFGap a j t k s ≤ CanonicalOddCFGap a k s l u := by
+  exact (incoming_gap_le_first_scale hpos hprev hfirst).trans
+    (first_scale_le_outgoing_gap hpos hnext hfirst)
 
 lemma canonicalBlockLength_le_partialQuotient (a : ℕ → ℕ) (j : ℕ) :
     canonicalBlockLength a j ≤ a (j + 1) := by
