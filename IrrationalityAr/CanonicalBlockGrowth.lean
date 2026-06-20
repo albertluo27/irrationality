@@ -59,6 +59,32 @@ def oddBlockASet (a : ℕ → ℕ) : Set ℕ :=
         2 ≤ CFBlockDenominator a j t ∧
         n = CFBlockDenominator a j t - 1}
 
+/-- The same selected continued-fraction block denominators as
+`oddBlockASet`, before shifting each denominator down by one. -/
+def oddBlockDenominatorSet (a : ℕ → ℕ) : Set ℕ :=
+  {Q : ℕ |
+    ∃ j t : ℕ,
+      1 ≤ t ∧ t ≤ a (j + 1) ∧
+        Odd (CFBlockNumerator a j t) ∧
+        2 ≤ CFBlockDenominator a j t ∧
+        Q = CFBlockDenominator a j t}
+
+theorem mem_oddBlockASet_iff_succ_mem_oddBlockDenominatorSet
+    (a : ℕ → ℕ) (n : ℕ) :
+    n ∈ oddBlockASet a ↔ n + 1 ∈ oddBlockDenominatorSet a := by
+  constructor
+  · rintro ⟨j, t, ht1, htle, hodd, hQ2, hn⟩
+    refine ⟨j, t, ht1, htle, hodd, hQ2, ?_⟩
+    omega
+  · rintro ⟨j, t, ht1, htle, hodd, hQ2, hn⟩
+    refine ⟨j, t, ht1, htle, hodd, hQ2, ?_⟩
+    omega
+
+lemma zero_not_mem_oddBlockASet (a : ℕ → ℕ) :
+    0 ∉ oddBlockASet a := by
+  rintro ⟨j, t, ht1, htle, hodd, hQ2, h0⟩
+  omega
+
 /-- A set of natural numbers has nondecreasing gaps between consecutive
 members.  This avoids choosing an explicit increasing enumeration
 `s = {a₁ < a₂ < ...}`. -/
@@ -70,9 +96,64 @@ def SetConsecutiveGapsNondecreasing (s : Set ℕ) : Prop :=
           (∀ x : ℕ, x ∈ s → b < x → x < c → False) →
             b - a ≤ c - b
 
+/-- Shifting every element of a set down by one preserves consecutive gaps.
+
+The hypothesis `n ∈ S ↔ n + 1 ∈ D` packages the shift without choosing an
+enumeration of either set. -/
+lemma SetConsecutiveGapsNondecreasing_shift_sub_one
+    {D S : Set ℕ}
+    (hS : ∀ n : ℕ, n ∈ S ↔ n + 1 ∈ D)
+    (hD : SetConsecutiveGapsNondecreasing D) :
+    SetConsecutiveGapsNondecreasing S := by
+  intro a b c ha hb hc hab hbc hnone_ab hnone_bc
+  have hDa : a + 1 ∈ D := (hS a).1 ha
+  have hDb : b + 1 ∈ D := (hS b).1 hb
+  have hDc : c + 1 ∈ D := (hS c).1 hc
+  have hnoneD_ab :
+      ∀ x : ℕ, x ∈ D → a + 1 < x → x < b + 1 → False := by
+    intro x hx hax hxb
+    have hxS : x - 1 ∈ S := by
+      rw [hS]
+      have hxsucc : x - 1 + 1 = x := by omega
+      simpa [hxsucc] using hx
+    exact hnone_ab (x - 1) hxS (by omega) (by omega)
+  have hnoneD_bc :
+      ∀ x : ℕ, x ∈ D → b + 1 < x → x < c + 1 → False := by
+    intro x hx hbx hxc
+    have hxS : x - 1 ∈ S := by
+      rw [hS]
+      have hxsucc : x - 1 + 1 = x := by omega
+      simpa [hxsucc] using hx
+    exact hnone_bc (x - 1) hxS (by omega) (by omega)
+  have hgap :=
+    hD (a + 1) (b + 1) (c + 1)
+      hDa hDb hDc (by omega) (by omega) hnoneD_ab hnoneD_bc
+  omega
+
 /-- Gap-monotonicity target for `A_r`. -/
 def AGapsNondecreasing (r : ℝ) : Prop :=
   SetConsecutiveGapsNondecreasing (A r)
+
+/-- Gap-monotonicity for the coefficient-side shifted denominator set. -/
+def OddBlockASetGapsNondecreasing (a : ℕ → ℕ) : Prop :=
+  SetConsecutiveGapsNondecreasing (oddBlockASet a)
+
+/-- Gap-monotonicity for the selected continued-fraction denominators before
+the final `-1` shift. -/
+def OddBlockDenominatorSetGapsNondecreasing (a : ℕ → ℕ) : Prop :=
+  SetConsecutiveGapsNondecreasing (oddBlockDenominatorSet a)
+
+theorem oddBlockASet_gaps_nondecreasing_of_denominatorSet
+    {a : ℕ → ℕ}
+    (hD : OddBlockDenominatorSetGapsNondecreasing a) :
+    OddBlockASetGapsNondecreasing a := by
+  unfold OddBlockASetGapsNondecreasing
+    OddBlockDenominatorSetGapsNondecreasing at *
+  exact SetConsecutiveGapsNondecreasing_shift_sub_one
+    (D := oddBlockDenominatorSet a)
+    (S := oddBlockASet a)
+    (mem_oddBlockASet_iff_succ_mem_oddBlockDenominatorSet a)
+    hD
 
 /-- A valid parity-selected index in the canonical continued-fraction
 principal/intermediate path. -/
@@ -1483,6 +1564,14 @@ def visibleCanonicalDenominatorSet
   (Finset.range (2 * Nat.log 2 N + 3)).biUnion fun j =>
     visibleCanonicalOddDenominatorBlock a N j
 
+/-- The positive part of the visible canonical denominator set.
+
+The full shifted denominator set can contain the harmless initial value
+`0 = 1 - 1`; this version is the one that matches the floor-sum set `A`. -/
+def positiveVisibleCanonicalDenominatorSet
+    (a : ℕ → ℕ) (N : ℕ) : Finset ℕ :=
+  (visibleCanonicalDenominatorSet a N).erase 0
+
 noncomputable def visiblePopularDifferenceExponent (a : ℕ → ℕ) : ℝ :=
   limsup
     (fun N : ℕ =>
@@ -1491,11 +1580,28 @@ noncomputable def visiblePopularDifferenceExponent (a : ℕ → ℕ) : ℝ :=
         Real.log (N : ℝ))
     atTop
 
+noncomputable def positiveVisiblePopularDifferenceExponent (a : ℕ → ℕ) : ℝ :=
+  limsup
+    (fun N : ℕ =>
+      Real.log
+        (popularDifferenceUpTo
+          (positiveVisibleCanonicalDenominatorSet a N) N : ℝ) /
+        Real.log (N : ℝ))
+    atTop
+
 noncomputable def visibleAdditiveEnergyExponent (a : ℕ → ℕ) : ℝ :=
   limsup
     (fun N : ℕ =>
       Real.log
         (additiveEnergy (visibleCanonicalDenominatorSet a N) : ℝ) /
+        Real.log (N : ℝ))
+    atTop
+
+noncomputable def positiveVisibleAdditiveEnergyExponent (a : ℕ → ℕ) : ℝ :=
+  limsup
+    (fun N : ℕ =>
+      Real.log
+        (additiveEnergy (positiveVisibleCanonicalDenominatorSet a N) : ℝ) /
         Real.log (N : ℝ))
     atTop
 
@@ -1512,6 +1618,65 @@ noncomputable def visibleHilbertCubeExponent (a : ℕ → ℕ) : ℝ :=
         (visibleCanonicalDenominatorSet a N) : ℝ) /
         Real.log (N : ℝ))
     atTop
+
+noncomputable def positiveVisibleHilbertCubeExponent (a : ℕ → ℕ) : ℝ :=
+  limsup
+    (fun N : ℕ =>
+      (properHilbertCubeDimension
+        (positiveVisibleCanonicalDenominatorSet a N) : ℝ) /
+        Real.log (N : ℝ))
+    atTop
+
+noncomputable def popularDifferenceExponentOf (S : ℕ → Finset ℕ) : ℝ :=
+  limsup
+    (fun N : ℕ =>
+      Real.log (popularDifferenceUpTo (S N) N : ℝ) /
+        Real.log (N : ℝ))
+    atTop
+
+noncomputable def additiveEnergyExponentOf (S : ℕ → Finset ℕ) : ℝ :=
+  limsup
+    (fun N : ℕ =>
+      Real.log (additiveEnergy (S N) : ℝ) /
+        Real.log (N : ℝ))
+    atTop
+
+noncomputable def hilbertCubeExponentOf (S : ℕ → Finset ℕ) : ℝ :=
+  limsup
+    (fun N : ℕ =>
+      (properHilbertCubeDimension (S N) : ℝ) /
+        Real.log (N : ℝ))
+    atTop
+
+theorem popularDifferenceExponent_congr
+    {S T : ℕ → Finset ℕ}
+    (hST : ∀ N, S N = T N) :
+    popularDifferenceExponentOf S =
+      popularDifferenceExponentOf T := by
+  unfold popularDifferenceExponentOf
+  congr
+  ext N
+  rw [hST N]
+
+theorem additiveEnergyExponent_congr
+    {S T : ℕ → Finset ℕ}
+    (hST : ∀ N, S N = T N) :
+    additiveEnergyExponentOf S =
+      additiveEnergyExponentOf T := by
+  unfold additiveEnergyExponentOf
+  congr
+  ext N
+  rw [hST N]
+
+theorem hilbertCubeExponent_congr
+    {S T : ℕ → Finset ℕ}
+    (hST : ∀ N, S N = T N) :
+    hilbertCubeExponentOf S =
+      hilbertCubeExponentOf T := by
+  unfold hilbertCubeExponentOf
+  congr
+  ext N
+  rw [hST N]
 
 noncomputable def visibleCanonicalLocalRatio
     (a : ℕ → ℕ) (N j : ℕ) : ℝ :=
@@ -1703,6 +1868,134 @@ lemma mem_visibleCanonicalDenominatorSet_le
   rcases Finset.mem_biUnion.mp hx with ⟨j, _hj, hxj⟩
   rw [visibleCanonicalOddDenominatorBlock, Finset.mem_filter] at hxj
   omega
+
+/-- Away from the harmless `0 = 1 - 1` initial denominator, the visible
+canonical denominator set is exactly the denominator-truncated odd block
+`A`-set attached to the coefficient sequence. -/
+theorem mem_visibleCanonicalDenominatorSet_iff
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1))
+    (N n : ℕ)
+    (hnpos : 0 < n) :
+    n ∈ visibleCanonicalDenominatorSet a N ↔
+      n ∈ oddBlockASet a ∧ n + 1 ≤ N := by
+  constructor
+  · intro hn
+    rw [visibleCanonicalDenominatorSet] at hn
+    rcases Finset.mem_biUnion.mp hn with ⟨j, _hj, hnj⟩
+    rw [visibleCanonicalOddDenominatorBlock, Finset.mem_filter] at hnj
+    rcases hnj with ⟨hnblock, hnN⟩
+    rw [canonicalOddDenominatorBlock] at hnblock
+    rcases Finset.mem_image.mp hnblock with ⟨t, ht, htn⟩
+    have hsel := mem_canonicalOddBlock_iff.mp ht
+    have hqpos : 0 < continuantDen a j :=
+      lt_of_lt_of_le Nat.zero_lt_one
+        (one_le_continuantDen_of_partials_pos_global a hpos j)
+    have hblockpos : 0 < CFBlockDenominator a j t := by
+      unfold CFBlockDenominator
+      exact Nat.add_pos_right _ (Nat.mul_pos hsel.1 hqpos)
+    have hn_succ_eq :
+        n + 1 = CFBlockDenominator a j t := by
+      rw [← htn]
+      exact Nat.sub_add_cancel (Nat.succ_le_of_lt hblockpos)
+    have hQ2 : 2 ≤ CFBlockDenominator a j t := by
+      omega
+    constructor
+    · exact ⟨j, t, hsel.1, hsel.2.1, hsel.2.2, hQ2, htn.symm⟩
+    · exact hnN
+  · rintro ⟨hnOdd, hnN⟩
+    rcases hnOdd with ⟨j, t, ht1, htle, hodd, _hQ2, hn_eq⟩
+    have hnblock : n ∈ canonicalOddDenominatorBlock a j := by
+      rw [canonicalOddDenominatorBlock, Finset.mem_image]
+      refine ⟨t, ?_, hn_eq.symm⟩
+      rw [mem_canonicalOddBlock_iff]
+      exact ⟨ht1, htle, hodd⟩
+    exact mem_visibleCanonicalDenominatorSet_of_mem_block_le
+      hpos hnblock hnN
+
+/-- Finite truncation of `oddBlockASet` at shifted denominator cap `N`.
+
+Membership in `Finset.range N` means `n < N`, equivalently `n + 1 ≤ N`. -/
+noncomputable def oddBlockASetTrunc (a : ℕ → ℕ) (N : ℕ) : Finset ℕ := by
+  classical
+  exact (Finset.range N).filter fun n : ℕ => n ∈ oddBlockASet a
+
+@[simp] theorem mem_oddBlockASetTrunc_iff
+    {a : ℕ → ℕ} {N n : ℕ} :
+    n ∈ oddBlockASetTrunc a N ↔ n + 1 ≤ N ∧ n ∈ oddBlockASet a := by
+  classical
+  unfold oddBlockASetTrunc
+  rw [Finset.mem_filter, Finset.mem_range, Nat.lt_iff_add_one_le]
+
+/-- Finite truncation of the actual floor-sum set `A r` at shifted
+denominator cap `N`. -/
+noncomputable def visibleFloorSumASet (r : ℝ) (N : ℕ) : Finset ℕ := by
+  classical
+  exact (Finset.range N).filter fun n : ℕ => n ∈ A r
+
+@[simp] theorem mem_visibleFloorSumASet_iff
+    {r : ℝ} {N n : ℕ} :
+    n ∈ visibleFloorSumASet r N ↔ n + 1 ≤ N ∧ n ∈ A r := by
+  classical
+  unfold visibleFloorSumASet
+  rw [Finset.mem_filter, Finset.mem_range, Nat.lt_iff_add_one_le]
+
+noncomputable def floorSumAPopularDifferenceExponent (r : ℝ) : ℝ :=
+  limsup
+    (fun N : ℕ =>
+      Real.log
+        (popularDifferenceUpTo (visibleFloorSumASet r N) N : ℝ) /
+        Real.log (N : ℝ))
+    atTop
+
+noncomputable def floorSumAAdditiveEnergyExponent (r : ℝ) : ℝ :=
+  limsup
+    (fun N : ℕ =>
+      Real.log
+        (additiveEnergy (visibleFloorSumASet r N) : ℝ) /
+        Real.log (N : ℝ))
+    atTop
+
+noncomputable def floorSumAHilbertCubeExponent (r : ℝ) : ℝ :=
+  limsup
+    (fun N : ℕ =>
+      (properHilbertCubeDimension (visibleFloorSumASet r N) : ℝ) /
+        Real.log (N : ℝ))
+    atTop
+
+/-- The visible canonical set, after removing the possible initial `0`, is the
+finite truncation of `oddBlockASet` at denominator cap `N`. -/
+theorem visibleCanonicalDenominatorSet_erase_zero_eq_oddBlockASetTrunc
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1))
+    (N : ℕ) :
+    (visibleCanonicalDenominatorSet a N).erase 0 =
+      oddBlockASetTrunc a N := by
+  classical
+  ext n
+  by_cases hn0 : n = 0
+  · subst n
+    simp [zero_not_mem_oddBlockASet]
+  · have hnpos : 0 < n := Nat.pos_of_ne_zero hn0
+    rw [Finset.mem_erase, mem_oddBlockASetTrunc_iff,
+      mem_visibleCanonicalDenominatorSet_iff hpos N n hnpos]
+    constructor
+    · rintro ⟨_hnne, hnOdd, hnN⟩
+      exact ⟨hnN, hnOdd⟩
+    · rintro ⟨hnlt, hnOdd⟩
+      exact ⟨hn0, hnOdd, hnlt⟩
+
+/-- The positive visible canonical set is exactly the finite truncation of the
+coefficient-side odd-block `A`-set. -/
+theorem positiveVisibleCanonicalDenominatorSet_eq_oddBlockASetTrunc
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1))
+    (N : ℕ) :
+    positiveVisibleCanonicalDenominatorSet a N =
+      oddBlockASetTrunc a N := by
+  simpa [positiveVisibleCanonicalDenominatorSet] using
+    visibleCanonicalDenominatorSet_erase_zero_eq_oddBlockASetTrunc
+      (a := a) hpos N
 
 theorem visibleCanonical_additive_upper_bridge
     {a : ℕ → ℕ}
@@ -1923,6 +2216,65 @@ lemma canonicalBlockExponent_le_visibleCanonicalBlockExponent
   have hlim := Filter.limsup_le_limsup hFG hFcobdd hGbdd
   simpa [canonicalBlockExponent, visibleCanonicalBlockExponent, F, G] using hlim
 
+theorem fullCanonicalBlock_additive_lower_bridge_of_block_subset
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1))
+    {S : Finset ℕ} {N j : ℕ}
+    (hblock_subset :
+      ∀ t ∈ canonicalOddBlock a j,
+        CFBlockDenominator a j t - 1 ∈ S)
+    (hjN : continuantDen a (j + 1) ≤ N) :
+    canonicalBlockLength a j
+      ≤ popularDifferenceUpTo S N ∧
+    (canonicalBlockLength a j) ^ 3
+      ≤ 2 * additiveEnergy S ∧
+    ∀ h : ℕ,
+      2 ^ h ≤ canonicalBlockLength a j →
+        HasProperHilbertCube S h := by
+  obtain ⟨s, d, m, hd, hm, hblock⟩ :=
+    exists_finiteArithmeticBlock_subset_canonicalOddDenominatorBlock
+      (a := a) (j := j) hpos
+  subst m
+  have hblock_S :
+      finiteArithmeticBlock s d (canonicalBlockLength a j)
+        ⊆ S := by
+    intro x hx
+    have hxcanon : x ∈ canonicalOddDenominatorBlock a j := hblock hx
+    rw [canonicalOddDenominatorBlock] at hxcanon
+    rcases Finset.mem_image.mp hxcanon with ⟨t, ht, htx⟩
+    simpa [htx] using hblock_subset t ht
+  have hblock_le_N :
+      ∀ x ∈ finiteArithmeticBlock s d (canonicalBlockLength a j), x ≤ N := by
+    intro x hx
+    have hxcanon : x ∈ canonicalOddDenominatorBlock a j := hblock hx
+    have hsucc : x + 1 ≤ N :=
+      (canonicalOddDenominatorBlock_succ_le_endpoint hpos hxcanon).trans hjN
+    omega
+  constructor
+  · by_cases hm2 : 2 ≤ canonicalBlockLength a j
+    · have hdleN : d ≤ N :=
+        block_step_le_of_two_le_length_subset_Iic
+          (S := finiteArithmeticBlock s d (canonicalBlockLength a j))
+          (s := s) (d := d) (m := canonicalBlockLength a j)
+          (N := N) hm2 (by intro x hx; exact hx)
+          hblock_le_N
+      exact popularDifferenceUpTo_ge_of_block_subset
+        (S := S)
+        (N := N)
+        ⟨Nat.succ_le_of_lt hd, hdleN⟩ hblock_S
+    · have hle1 : canonicalBlockLength a j ≤ 1 := by omega
+      exact hle1.trans
+        (one_le_popularDifferenceUpTo
+          S N)
+  constructor
+  · exact additiveEnergy_ge_of_arithmeticBlock_subset
+      (S := S)
+      hd hblock_S
+  · intro h hh
+    exact hasProperHilbertCube_of_two_pow_le_block_length
+      (S := S)
+      hd hh hblock_S
+
 theorem fullCanonicalBlock_additive_lower_bridge
     {a : ℕ → ℕ}
     (hpos : ∀ n : ℕ, 0 < a (n + 1))
@@ -1935,41 +2287,19 @@ theorem fullCanonicalBlock_additive_lower_bridge
     ∀ h : ℕ,
       2 ^ h ≤ canonicalBlockLength a j →
         HasProperHilbertCube (visibleCanonicalDenominatorSet a N) h := by
-  obtain ⟨s, d, m, hd, hm, hblock⟩ :=
-    exists_finiteArithmeticBlock_subset_canonicalOddDenominatorBlock
-      (a := a) (j := j) hpos
-  subst m
-  have hcanon_subset :
-      canonicalOddDenominatorBlock a j ⊆ visibleCanonicalDenominatorSet a N :=
-    canonicalOddDenominatorBlock_subset_visibleSet_of_endpoint_le hpos hjN
-  have hblock_visible :
-      finiteArithmeticBlock s d (canonicalBlockLength a j)
-        ⊆ visibleCanonicalDenominatorSet a N :=
-    hblock.trans hcanon_subset
-  constructor
-  · by_cases hm2 : 2 ≤ canonicalBlockLength a j
-    · have hdleN : d ≤ N :=
-        block_step_le_of_two_le_length_subset_Iic
-          (S := visibleCanonicalDenominatorSet a N)
-          (s := s) (d := d) (m := canonicalBlockLength a j)
-          (N := N) hm2 hblock_visible
-          (fun x hx => mem_visibleCanonicalDenominatorSet_le hx)
-      exact popularDifferenceUpTo_ge_of_block_subset
-        (S := visibleCanonicalDenominatorSet a N)
-        (N := N)
-        ⟨Nat.succ_le_of_lt hd, hdleN⟩ hblock_visible
-    · have hle1 : canonicalBlockLength a j ≤ 1 := by omega
-      exact hle1.trans
-        (one_le_popularDifferenceUpTo
-          (visibleCanonicalDenominatorSet a N) N)
-  constructor
-  · exact additiveEnergy_ge_of_arithmeticBlock_subset
-      (S := visibleCanonicalDenominatorSet a N)
-      hd hblock_visible
-  · intro h hh
-    exact hasProperHilbertCube_of_two_pow_le_block_length
-      (S := visibleCanonicalDenominatorSet a N)
-      hd hh hblock_visible
+  exact fullCanonicalBlock_additive_lower_bridge_of_block_subset
+    (a := a) hpos
+    (S := visibleCanonicalDenominatorSet a N)
+    (N := N) (j := j)
+    (by
+      intro t ht
+      have hqmem :
+          CFBlockDenominator a j t - 1 ∈ canonicalOddDenominatorBlock a j := by
+        rw [canonicalOddDenominatorBlock, Finset.mem_image]
+        exact ⟨t, ht, rfl⟩
+      exact canonicalOddDenominatorBlock_subset_visibleSet_of_endpoint_le
+        hpos hjN hqmem)
+    hjN
 
 lemma canonicalOddCFGap_same_block
     (a : ℕ → ℕ) {j t s : ℕ} (hts : t ≤ s) :
@@ -2031,6 +2361,71 @@ lemma canonicalOddCFGap_endpoint_to_after_next_first
         continuantDen a (j + 1) + continuantDen a (j + 2) := by
     simpa [Nat.add_assoc] using CFBlockDenominator_next_block_first a (j + 1)
   rw [hfirst]
+  omega
+
+/-- From the endpoint of block `j` to the second point of block `j + 1`,
+the denominator gap is `q_j + q_{j+1}`. -/
+lemma canonicalOddCFGap_endpoint_to_next_second
+    (a : ℕ → ℕ) (j : ℕ) :
+    CanonicalOddCFGap a j (a (j + 1)) (j + 1) 2 =
+      continuantDen a j + continuantDen a (j + 1) := by
+  unfold CanonicalOddCFGap
+  rw [CFBlockDenominator_endpoint]
+  have hsucc := CFBlockDenominator_succ a (j + 1) 1
+  have hfirst := CFBlockDenominator_next_block_first a j
+  rw [hfirst] at hsucc
+  rw [hsucc]
+  omega
+
+/-- Denominators are monotone in the local block index. -/
+lemma CFBlockDenominator_le_of_index_le
+    (a : ℕ → ℕ) {j t u : ℕ}
+    (htu : t ≤ u) :
+    CFBlockDenominator a j t ≤ CFBlockDenominator a j u := by
+  unfold CFBlockDenominator
+  exact Nat.add_le_add_left
+    (Nat.mul_le_mul_right (continuantDen a j) htu)
+    (continuantDenPrev a j)
+
+/-- The next raw denominator-path point after `(k,s)` is at least one
+`q_k`-step away, as long as `s` has not passed the block endpoint. -/
+lemma CFBlockDenominator_add_current_le_next_block_first
+    (a : ℕ → ℕ) {k s : ℕ}
+    (hs : s ≤ a (k + 1)) :
+    CFBlockDenominator a k s + continuantDen a k ≤
+      CFBlockDenominator a (k + 1) 1 := by
+  rw [CFBlockDenominator_next_block_first]
+  unfold CFBlockDenominator
+  rw [continuantDen_succ_eq]
+  have hmul :
+      s * continuantDen a k ≤
+        a (k + 1) * continuantDen a k :=
+    Nat.mul_le_mul_right _ hs
+  omega
+
+/-- The first point of block `k + 1` is no later than any point in block
+`k + 2`. -/
+lemma CFBlockDenominator_next_block_first_le_two_step
+    (a : ℕ → ℕ)
+    (hpos : ∀ j : ℕ, 0 < a (j + 1))
+    {k u : ℕ}
+    (hu : 1 ≤ u) :
+    CFBlockDenominator a (k + 1) 1 ≤
+      CFBlockDenominator a (k + 2) u := by
+  have hq_le :
+      continuantDen a k ≤ continuantDen a (k + 2) :=
+    (continuantDen_mono_of_partials_pos a hpos k).trans
+      (continuantDen_mono_of_partials_pos a hpos (k + 1))
+  have hq_le_uq :
+      continuantDen a k ≤ u * continuantDen a (k + 2) := by
+    exact hq_le.trans
+      (by
+        simpa using
+          (Nat.mul_le_mul_right (continuantDen a (k + 2)) hu :
+            1 * continuantDen a (k + 2) ≤
+              u * continuantDen a (k + 2)))
+  unfold CFBlockDenominator
+  simp [continuantDenPrev]
   omega
 
 lemma incoming_gap_le_first_scale
@@ -2122,6 +2517,129 @@ lemma CFBlockDenominator_next_block_ge_first
         u * continuantDen a (j + 1) :=
     Nat.mul_le_mul_right _ hu
   omega
+
+lemma CFBlockDenominator_lt_same_block_iff
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1))
+    {j t s : ℕ} :
+    CFBlockDenominator a j t < CFBlockDenominator a j s ↔ t < s := by
+  unfold CFBlockDenominator
+  have hqpos : 0 < continuantDen a j :=
+    lt_of_lt_of_le Nat.zero_lt_one
+      (one_le_continuantDen_of_partials_pos_global a hpos j)
+  constructor
+  · intro h
+    have hmul : t * continuantDen a j < s * continuantDen a j := by
+      omega
+    exact (Nat.mul_lt_mul_right hqpos).mp hmul
+  · intro hts
+    have hmul : t * continuantDen a j < s * continuantDen a j :=
+      (Nat.mul_lt_mul_right hqpos).mpr hts
+    omega
+
+lemma CFBlockDenominator_lt_of_block_lt
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1))
+    {j t k s : ℕ}
+    (hjt : 1 ≤ t ∧ t ≤ a (j + 1))
+    (hks : 1 ≤ s ∧ s ≤ a (k + 1))
+    (hjk : j < k) :
+    CFBlockDenominator a j t < CFBlockDenominator a k s := by
+  have hleft :
+      CFBlockDenominator a j t ≤ continuantDen a (j + 1) :=
+    CFBlockDenominator_le_endpoint a hjt.2
+  have hmono :
+      continuantDen a (j + 1) ≤ continuantDen a k :=
+    continuantDen_mono_of_partials_pos_le a hpos (by omega)
+  have hs_mul :
+      continuantDen a k ≤ s * continuantDen a k := by
+    simpa using
+      (Nat.mul_le_mul_right (continuantDen a k) hks.1 :
+        1 * continuantDen a k ≤ s * continuantDen a k)
+  have hprev_pos : 0 < continuantDenPrev a k := by
+    rcases Nat.exists_eq_succ_of_ne_zero
+        (Nat.ne_of_gt (lt_of_le_of_lt (Nat.zero_le j) hjk)) with ⟨k', rfl⟩
+    simp [continuantDenPrev]
+    exact lt_of_lt_of_le Nat.zero_lt_one
+      (one_le_continuantDen_of_partials_pos_global a hpos k')
+  have hleft_to_mul :
+      CFBlockDenominator a j t ≤ s * continuantDen a k :=
+    hleft.trans (hmono.trans hs_mul)
+  calc
+    CFBlockDenominator a j t
+        ≤ s * continuantDen a k := hleft_to_mul
+    _ < continuantDenPrev a k + s * continuantDen a k := by omega
+    _ = CFBlockDenominator a k s := rfl
+
+lemma CFBlockIndexLt_iff_CFBlockDenominator_lt
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1))
+    {j t k s : ℕ}
+    (hjt : 1 ≤ t ∧ t ≤ a (j + 1))
+    (hks : 1 ≤ s ∧ s ≤ a (k + 1)) :
+    CFBlockIndexLt j t k s ↔
+      CFBlockDenominator a j t < CFBlockDenominator a k s := by
+  constructor
+  · intro hidx
+    rcases hidx with hjk | ⟨hjk, hts⟩
+    · exact CFBlockDenominator_lt_of_block_lt hpos hjt hks hjk
+    · subst k
+      exact (CFBlockDenominator_lt_same_block_iff
+        (a := a) hpos).2 hts
+  · intro hden
+    rcases lt_trichotomy j k with hjk | hjk | hkj
+    · exact Or.inl hjk
+    · subst k
+      exact Or.inr ⟨rfl,
+        (CFBlockDenominator_lt_same_block_iff
+          (a := a) hpos).1 hden⟩
+    · have hrev :
+          CFBlockDenominator a k s < CFBlockDenominator a j t :=
+        CFBlockDenominator_lt_of_block_lt hpos hks hjt hkj
+      omega
+
+lemma ConsecutiveSelected_of_oddBlockDenominatorSet_consecutive
+    {a : ℕ → ℕ}
+    (hpos : ∀ j : ℕ, 0 < a (j + 1))
+    {x y j t k s : ℕ}
+    (hjt : CanonicalOddCFIndex a j t)
+    (hks : CanonicalOddCFIndex a k s)
+    (hQjt : 2 ≤ CFBlockDenominator a j t)
+    (hx : x = CFBlockDenominator a j t)
+    (hy : y = CFBlockDenominator a k s)
+    (hxy : x < y)
+    (hnone :
+      ∀ Q : ℕ, Q ∈ oddBlockDenominatorSet a → x < Q → Q < y → False) :
+    ConsecutiveSelected a j t k s := by
+  have hjt_range : 1 ≤ t ∧ t ≤ a (j + 1) :=
+    ⟨hjt.1, hjt.2.1⟩
+  have hks_range : 1 ≤ s ∧ s ≤ a (k + 1) :=
+    ⟨hks.1, hks.2.1⟩
+  have hxy_den :
+      CFBlockDenominator a j t < CFBlockDenominator a k s := by
+    simpa [hx, hy] using hxy
+  have hidx : CFBlockIndexLt j t k s :=
+    (CFBlockIndexLt_iff_CFBlockDenominator_lt
+      (a := a) hpos hjt_range hks_range).2 hxy_den
+  refine ⟨hjt, hks, hidx, ?_⟩
+  intro r v hrv hleft hright
+  have hrv_range : 1 ≤ v ∧ v ≤ a (r + 1) :=
+    ⟨hrv.1, hrv.2.1⟩
+  have hden_left :
+      CFBlockDenominator a j t < CFBlockDenominator a r v :=
+    (CFBlockIndexLt_iff_CFBlockDenominator_lt
+      (a := a) hpos hjt_range hrv_range).1 hleft
+  have hden_right :
+      CFBlockDenominator a r v < CFBlockDenominator a k s :=
+    (CFBlockIndexLt_iff_CFBlockDenominator_lt
+      (a := a) hpos hrv_range hks_range).1 hright
+  have hQrv : 2 ≤ CFBlockDenominator a r v := by
+    omega
+  have hmem : CFBlockDenominator a r v ∈ oddBlockDenominatorSet a :=
+    ⟨r, v, hrv.1, hrv.2.1, hrv.2.2, hQrv, rfl⟩
+  exact hnone (CFBlockDenominator a r v) hmem
+    (by simpa [hx] using hden_left)
+    (by simpa [hy] using hden_right)
 
 lemma first_scale_le_outgoing_gap
     {a : ℕ → ℕ}
@@ -2384,6 +2902,535 @@ theorem boundary_gap_le_next_gap_of_middle_first
     CanonicalOddCFGap a j t k s ≤ CanonicalOddCFGap a k s l u := by
   exact (incoming_gap_le_first_scale hpos hprev hfirst).trans
     (first_scale_le_outgoing_gap hpos hnext hfirst)
+
+/-- If the middle selected index is not first in its block, then the
+previous selected index must lie in that same block. -/
+lemma prev_block_eq_of_not_first_middle
+    {a : ℕ → ℕ} {j t k s : ℕ}
+    (hprev : ConsecutiveSelected a j t k s)
+    (hnotfirst : ¬ IsFirstSelectedInBlock a k s) :
+    j = k := by
+  rcases hprev with ⟨hjt, hks, hlt, hnone⟩
+  by_cases hjk : j = k
+  · exact hjk
+  · have hprior : ∃ r : ℕ, CanonicalOddCFIndex a k r ∧ r < s := by
+      by_contra hno
+      apply hnotfirst
+      refine ⟨hks, ?_⟩
+      intro r hr hrs
+      exact hno ⟨r, hr, hrs⟩
+    rcases hprior with ⟨r, hr, hrs⟩
+    rcases hlt with hjk_lt | ⟨hjk_eq, _⟩
+    · exact False.elim <| hnone k r hr (Or.inl hjk_lt) (Or.inr ⟨rfl, hrs⟩)
+    · exact (hjk hjk_eq).elim
+
+/-- In a block whose current numerator is even, every admissible block index
+is parity-selected, so consecutive selected indices in that block are adjacent. -/
+lemma same_block_selected_step_eq_one_of_curr_even
+    {a : ℕ → ℕ} {k t s : ℕ}
+    (h : ConsecutiveSelected a k t k s)
+    (hcurrEven : Even (continuantNum a k)) :
+    s = t + 1 := by
+  rcases h with ⟨_htsel, hssel, hlt, hnone⟩
+  have hts : t < s := by
+    rcases hlt with hkk | ⟨_hkk, hts⟩
+    · omega
+    · exact hts
+  have hprevOdd : Odd (continuantNumPrev a k) := by
+    rcases Nat.even_or_odd (continuantNumPrev a k) with hprevEven | hprevOdd
+    · exact False.elim
+        (continuantNumPrev_not_even_and_even a k ⟨hprevEven, hcurrEven⟩)
+    · exact hprevOdd
+  by_contra hsne
+  have ht1s : t + 1 < s := by omega
+  have ht1sel : CanonicalOddCFIndex a k (t + 1) := by
+    refine ⟨by omega, ?_, ?_⟩
+    · exact (Nat.le_of_lt ht1s).trans hssel.2.1
+    · exact odd_CFBlockNumerator_of_prev_odd_curr_even
+        (a := a) (j := k) (t := t + 1) hprevOdd hcurrEven
+  exact hnone k (t + 1) ht1sel
+    (Or.inr ⟨rfl, by omega⟩)
+    (Or.inr ⟨rfl, ht1s⟩)
+
+/-- In a block whose current numerator is odd, selected indices have one fixed
+parity, so consecutive selected indices in that block are two apart. -/
+lemma same_block_selected_step_eq_two_of_curr_odd
+    {a : ℕ → ℕ} {k t s : ℕ}
+    (h : ConsecutiveSelected a k t k s)
+    (hcurrOdd : Odd (continuantNum a k)) :
+    s = t + 2 := by
+  rcases h with ⟨htsel, hssel, hlt, hnone⟩
+  have hts : t < s := by
+    rcases hlt with hkk | ⟨_hkk, hts⟩
+    · omega
+    · exact hts
+  rcases Nat.even_or_odd (continuantNumPrev a k) with hprevEven | hprevOdd
+  · have htOdd : Odd t :=
+      (odd_CFBlockNumerator_iff_of_prev_even_curr_odd
+        hprevEven hcurrOdd).1 htsel.2.2
+    have hsOdd : Odd s :=
+      (odd_CFBlockNumerator_iff_of_prev_even_curr_odd
+        hprevEven hcurrOdd).1 hssel.2.2
+    have hs_le : s ≤ t + 2 := by
+      by_contra hnot
+      have ht2s : t + 2 < s := by omega
+      have ht2Odd : Odd (t + 2) := by
+        rcases htOdd with ⟨m, hm⟩
+        exact ⟨m + 1, by omega⟩
+      have ht2sel : CanonicalOddCFIndex a k (t + 2) := by
+        refine ⟨by omega, ?_, ?_⟩
+        · exact (Nat.le_of_lt ht2s).trans hssel.2.1
+        · exact (odd_CFBlockNumerator_iff_of_prev_even_curr_odd
+            hprevEven hcurrOdd).2 ht2Odd
+      exact hnone k (t + 2) ht2sel
+        (Or.inr ⟨rfl, by omega⟩)
+        (Or.inr ⟨rfl, ht2s⟩)
+    have hs_ne_succ : s ≠ t + 1 := by
+      intro hs
+      rcases htOdd with ⟨m, hm⟩
+      rcases hsOdd with ⟨n, hn⟩
+      omega
+    omega
+  · have htEven : Even t :=
+      (odd_CFBlockNumerator_iff_of_prev_odd_curr_odd
+        hprevOdd hcurrOdd).1 htsel.2.2
+    have hsEven : Even s :=
+      (odd_CFBlockNumerator_iff_of_prev_odd_curr_odd
+        hprevOdd hcurrOdd).1 hssel.2.2
+    have hs_le : s ≤ t + 2 := by
+      by_contra hnot
+      have ht2s : t + 2 < s := by omega
+      have ht2Even : Even (t + 2) := by
+        rcases htEven with ⟨m, hm⟩
+        exact ⟨m + 1, by omega⟩
+      have ht2sel : CanonicalOddCFIndex a k (t + 2) := by
+        refine ⟨by omega, ?_, ?_⟩
+        · exact (Nat.le_of_lt ht2s).trans hssel.2.1
+        · exact (odd_CFBlockNumerator_iff_of_prev_odd_curr_odd
+            hprevOdd hcurrOdd).2 ht2Even
+      exact hnone k (t + 2) ht2sel
+        (Or.inr ⟨rfl, by omega⟩)
+        (Or.inr ⟨rfl, ht2s⟩)
+    have hs_ne_succ : s ≠ t + 1 := by
+      intro hs
+      rcases htEven with ⟨m, hm⟩
+      rcases hsEven with ⟨n, hn⟩
+      omega
+    omega
+
+/-- Same-block consecutive selected gaps have the rigid local size dictated by
+the parity of the current numerator. -/
+lemma same_block_gap_eq_of_consecutive_selected
+    {a : ℕ → ℕ} {k t s : ℕ}
+    (h : ConsecutiveSelected a k t k s) :
+    CanonicalOddCFGap a k t k s =
+      if Even (continuantNum a k) then
+        continuantDen a k
+      else
+        2 * continuantDen a k := by
+  by_cases hcurrEven : Even (continuantNum a k)
+  · have hs : s = t + 1 :=
+      same_block_selected_step_eq_one_of_curr_even h hcurrEven
+    simp [hcurrEven, hs, canonicalOddCFGap_same_block_succ]
+  · have hcurrOdd : Odd (continuantNum a k) :=
+      Nat.not_even_iff_odd.mp hcurrEven
+    have hs : s = t + 2 :=
+      same_block_selected_step_eq_two_of_curr_odd h hcurrOdd
+    simp [hcurrEven, hs, canonicalOddCFGap_same_block_add_two]
+
+/-- Three consecutive selected indices in the same block have equal adjacent
+denominator gaps. -/
+lemma same_block_gap_eq_next_gap_of_three_same_block
+    {a : ℕ → ℕ} {k t s u : ℕ}
+    (hprev : ConsecutiveSelected a k t k s)
+    (hnext : ConsecutiveSelected a k s k u) :
+    CanonicalOddCFGap a k t k s =
+      CanonicalOddCFGap a k s k u := by
+  rw [same_block_gap_eq_of_consecutive_selected hprev,
+    same_block_gap_eq_of_consecutive_selected hnext]
+
+/-- Same-block part of the non-first middle comparison. -/
+lemma same_block_gap_le_next_gap_of_middle_not_first_same_block
+    {a : ℕ → ℕ} {k t s u : ℕ}
+    (hprev : ConsecutiveSelected a k t k s)
+    (hnext : ConsecutiveSelected a k s k u) :
+    CanonicalOddCFGap a k t k s ≤
+      CanonicalOddCFGap a k s k u := by
+  exact (same_block_gap_eq_next_gap_of_three_same_block hprev hnext).le
+
+/-- If a consecutive selected jump does not stay in the same block, then its
+target block is strictly later. -/
+lemma block_lt_of_consecutive_selected_ne
+    {a : ℕ → ℕ} {k s l u : ℕ}
+    (hnext : ConsecutiveSelected a k s l u)
+    (hneq : l ≠ k) :
+    k < l := by
+  rcases hnext with ⟨_hks, _hlu, hlt, _hnone⟩
+  rcases hlt with hkl | ⟨hkl, _hsu⟩
+  · exact hkl
+  · exact False.elim (hneq hkl.symm)
+
+/-- If the next consecutive selected index leaves block `k`, no selected
+index remains later in block `k`. -/
+lemma no_selected_after_of_consecutive_selected_leaves_block
+    {a : ℕ → ℕ} {k s l u r : ℕ}
+    (hnext : ConsecutiveSelected a k s l u)
+    (hkl : k < l)
+    (hsr : s < r) :
+    ¬ CanonicalOddCFIndex a k r := by
+  intro hr
+  rcases hnext with ⟨_hks, _hlu, _hlt, hnone⟩
+  exact hnone k r hr (Or.inr ⟨rfl, hsr⟩) (Or.inl hkl)
+
+/-- With odd current numerator, parity selection repeats two local indices
+later whenever that index is still inside the block. -/
+lemma selected_add_two_of_curr_odd
+    {a : ℕ → ℕ} {k s : ℕ}
+    (hOdd : Odd (continuantNum a k))
+    (hsel : CanonicalOddCFIndex a k s)
+    (hs2 : s + 2 ≤ a (k + 1)) :
+    CanonicalOddCFIndex a k (s + 2) := by
+  rcases Nat.even_or_odd (continuantNumPrev a k) with hprevEven | hprevOdd
+  · have hsOdd : Odd s :=
+      (odd_CFBlockNumerator_iff_of_prev_even_curr_odd
+        hprevEven hOdd).1 hsel.2.2
+    have hs2Odd : Odd (s + 2) := by
+      rcases hsOdd with ⟨m, hm⟩
+      exact ⟨m + 1, by omega⟩
+    exact ⟨by omega, hs2,
+      (odd_CFBlockNumerator_iff_of_prev_even_curr_odd
+        hprevEven hOdd).2 hs2Odd⟩
+  · have hsEven : Even s :=
+      (odd_CFBlockNumerator_iff_of_prev_odd_curr_odd
+        hprevOdd hOdd).1 hsel.2.2
+    have hs2Even : Even (s + 2) := by
+      rcases hsEven with ⟨m, hm⟩
+      exact ⟨m + 1, by omega⟩
+    exact ⟨by omega, hs2,
+      (odd_CFBlockNumerator_iff_of_prev_odd_curr_odd
+        hprevOdd hOdd).2 hs2Even⟩
+
+/-- If `s` is the last selected index in block `k` and the current numerator
+is odd, then `s` is either the endpoint or one before the endpoint. -/
+lemma coeff_eq_s_or_succ_of_last_selected_curr_odd
+    {a : ℕ → ℕ} {k s : ℕ}
+    (hOdd : Odd (continuantNum a k))
+    (hsel : CanonicalOddCFIndex a k s)
+    (hlast_no_after :
+      ∀ r : ℕ, s < r → ¬ CanonicalOddCFIndex a k r) :
+    a (k + 1) = s ∨ a (k + 1) = s + 1 := by
+  have hsle : s ≤ a (k + 1) := hsel.2.1
+  have hle : a (k + 1) ≤ s + 1 := by
+    by_contra hnot
+    have hs2 : s + 2 ≤ a (k + 1) := by omega
+    exact hlast_no_after (s + 2) (by omega)
+      (selected_add_two_of_curr_odd hOdd hsel hs2)
+  omega
+
+/-- If the endpoint of block `k` is selected and `p_k` is odd, then the first
+index in the next block is not selected. -/
+lemma not_selected_next_block_one_of_endpoint_selected_curr_odd
+    {a : ℕ → ℕ} {k s : ℕ}
+    (hOdd : Odd (continuantNum a k))
+    (hsel : CanonicalOddCFIndex a k s)
+    (hs_end : s = a (k + 1)) :
+    ¬ CanonicalOddCFIndex a (k + 1) 1 := by
+  intro hnext_one
+  have hpnextOdd : Odd (continuantNum a (k + 1)) := by
+    have h := hsel.2.2
+    rw [hs_end] at h
+    simpa [CFBlockNumerator_endpoint] using h
+  have hprevOdd_next : Odd (continuantNumPrev a (k + 1)) := by
+    simpa [continuantNumPrev] using hOdd
+  have hblockEven : Even (CFBlockNumerator a (k + 1) 1) := by
+    unfold CFBlockNumerator
+    simpa using hprevOdd_next.add_odd hpnextOdd
+  exact (Nat.not_even_iff_odd.mpr hnext_one.2.2) hblockEven
+
+/-- Any selected jump leaving block `k` has denominator gap at least `q_k`. -/
+lemma one_q_le_outgoing_gap_of_consecutive_selected_leaves_block
+    {a : ℕ → ℕ}
+    (hpos : ∀ j : ℕ, 0 < a (j + 1))
+    {k s l u : ℕ}
+    (hnext : ConsecutiveSelected a k s l u)
+    (hkl : k < l) :
+    continuantDen a k ≤ CanonicalOddCFGap a k s l u := by
+  rcases hnext with ⟨hks, hlu, _hlt, hnone⟩
+  have hl_cases : l = k + 1 ∨ l = k + 2 := by
+    have hle := consecutiveCanonicalOddCFIndices_block_le_add_two
+      (a := a) hpos ⟨hks, hlu, Or.inl hkl, hnone⟩
+    omega
+  rcases hl_cases with hl | hl
+  · subst l
+    have hfirst_le :
+        CFBlockDenominator a k s + continuantDen a k ≤
+          CFBlockDenominator a (k + 1) 1 :=
+      CFBlockDenominator_add_current_le_next_block_first a hks.2.1
+    have hend_le :
+        CFBlockDenominator a (k + 1) 1 ≤
+          CFBlockDenominator a (k + 1) u :=
+      CFBlockDenominator_le_of_index_le a hlu.1
+    have hsum :
+        CFBlockDenominator a k s + continuantDen a k ≤
+          CFBlockDenominator a (k + 1) u :=
+      hfirst_le.trans hend_le
+    have hsub :
+        CFBlockDenominator a k s ≤ CFBlockDenominator a (k + 1) u :=
+      (Nat.le_add_right _ _).trans hsum
+    unfold CanonicalOddCFGap
+    exact (Nat.le_sub_iff_add_le hsub).mpr (by
+      simpa [Nat.add_comm] using hsum)
+  · subst l
+    have hcurrent_le :
+        CFBlockDenominator a k s ≤ continuantDen a (k + 1) :=
+      CFBlockDenominator_le_endpoint a hks.2.1
+    have hnext_ge :
+        continuantDen a (k + 1) + continuantDen a (k + 2) ≤
+          CFBlockDenominator a (k + 2) u := by
+      simpa [Nat.add_assoc] using
+        CFBlockDenominator_next_block_ge_first (a := a) (j := k + 1) hlu.1
+    have hq_le :
+        continuantDen a k ≤ continuantDen a (k + 2) :=
+      (continuantDen_mono_of_partials_pos a hpos k).trans
+        (continuantDen_mono_of_partials_pos a hpos (k + 1))
+    have hsum :
+        CFBlockDenominator a k s + continuantDen a k ≤
+          CFBlockDenominator a (k + 2) u := by
+      omega
+    have hsub :
+        CFBlockDenominator a k s ≤ CFBlockDenominator a (k + 2) u :=
+      (Nat.le_add_right _ _).trans hsum
+    unfold CanonicalOddCFGap
+    exact (Nat.le_sub_iff_add_le hsub).mpr (by
+      simpa [Nat.add_comm] using hsum)
+
+/-- Convenient wrapper for the even-current same-block gap size. -/
+lemma same_block_gap_eq_q_of_consecutive_selected_curr_even
+    {a : ℕ → ℕ} {k t s : ℕ}
+    (h : ConsecutiveSelected a k t k s)
+    (hEven : Even (continuantNum a k)) :
+    CanonicalOddCFGap a k t k s = continuantDen a k := by
+  simpa [hEven] using same_block_gap_eq_of_consecutive_selected h
+
+/-- Convenient wrapper for the odd-current same-block gap size. -/
+lemma same_block_gap_eq_two_q_of_consecutive_selected_curr_odd
+    {a : ℕ → ℕ} {k t s : ℕ}
+    (h : ConsecutiveSelected a k t k s)
+    (hOdd : Odd (continuantNum a k)) :
+    CanonicalOddCFGap a k t k s = 2 * continuantDen a k := by
+  have hnot : ¬ Even (continuantNum a k) :=
+    Nat.not_even_iff_odd.mpr hOdd
+  simpa [hnot] using same_block_gap_eq_of_consecutive_selected h
+
+/-- If the current numerator is odd and a selected jump leaves block `k`
+from the last selected point of that block, then the outgoing gap is at least
+`2*q_k`. -/
+lemma two_q_le_outgoing_gap_of_odd_middle_notfirst_leaves_block
+    {a : ℕ → ℕ}
+    (hpos : ∀ j : ℕ, 0 < a (j + 1))
+    {k s l u : ℕ}
+    (hnext : ConsecutiveSelected a k s l u)
+    (hkl : k < l)
+    (hOdd : Odd (continuantNum a k)) :
+    2 * continuantDen a k ≤ CanonicalOddCFGap a k s l u := by
+  rcases hnext with ⟨hks, hlu, _hlt, hnone⟩
+  have hlast_no_after :
+      ∀ r : ℕ, s < r → ¬ CanonicalOddCFIndex a k r := by
+    intro r hsr hr
+    exact hnone k r hr (Or.inr ⟨rfl, hsr⟩) (Or.inl hkl)
+  have hcoeff_cases :
+      a (k + 1) = s ∨ a (k + 1) = s + 1 :=
+    coeff_eq_s_or_succ_of_last_selected_curr_odd
+      hOdd hks hlast_no_after
+  have hl_cases : l = k + 1 ∨ l = k + 2 := by
+    have hle := consecutiveCanonicalOddCFIndices_block_le_add_two
+      (a := a) hpos ⟨hks, hlu, Or.inl hkl, hnone⟩
+    omega
+  rcases hcoeff_cases with hend | hpred
+  · have hs_end : s = a (k + 1) := hend.symm
+    have hnot_next_one :
+        ¬ CanonicalOddCFIndex a (k + 1) 1 :=
+      not_selected_next_block_one_of_endpoint_selected_curr_odd
+        hOdd hks hs_end
+    rcases hl_cases with hl | hl
+    · subst l
+      have hu_ne_one : u ≠ 1 := by
+        intro hu1
+        subst u
+        exact hnot_next_one hlu
+      have hu2 : 2 ≤ u := by
+        cases u with
+        | zero =>
+            exact False.elim (Nat.not_succ_le_zero 0 hlu.1)
+        | succ u =>
+            cases u with
+            | zero =>
+                exact False.elim (hu_ne_one rfl)
+            | succ u =>
+                omega
+      have hsecond_le :
+          CFBlockDenominator a (k + 1) 2 ≤
+            CFBlockDenominator a (k + 1) u :=
+        CFBlockDenominator_le_of_index_le a hu2
+      have hgap_second :
+          CanonicalOddCFGap a k s (k + 1) 2 =
+            continuantDen a k + continuantDen a (k + 1) := by
+        rw [hs_end, canonicalOddCFGap_endpoint_to_next_second]
+      have hqmono :
+          continuantDen a k ≤ continuantDen a (k + 1) :=
+        continuantDen_mono_of_partials_pos a hpos k
+      have htwo_le_sum :
+          2 * continuantDen a k ≤
+            continuantDen a k + continuantDen a (k + 1) := by
+        omega
+      refine htwo_le_sum.trans ?_
+      rw [← hgap_second]
+      unfold CanonicalOddCFGap
+      exact Nat.sub_le_sub_right hsecond_le _
+    · subst l
+      have hfirst_le :
+          CFBlockDenominator a (k + 2) 1 ≤
+            CFBlockDenominator a (k + 2) u :=
+        CFBlockDenominator_le_of_index_le a hlu.1
+      have hgap_first :
+          CanonicalOddCFGap a k s (k + 2) 1 =
+            continuantDen a (k + 2) := by
+        rw [hs_end, canonicalOddCFGap_endpoint_to_after_next_first]
+      have htwo_le_q2 :
+          2 * continuantDen a k ≤ continuantDen a (k + 2) :=
+        two_mul_continuantDen_le_two_step_of_partials_pos a hpos k
+      refine htwo_le_q2.trans ?_
+      rw [← hgap_first]
+      unfold CanonicalOddCFGap
+      exact Nat.sub_le_sub_right hfirst_le _
+  · have hs_pred : s = a (k + 1) - 1 := by omega
+    have hgap_first :
+        CanonicalOddCFGap a k s (k + 1) 1 =
+          2 * continuantDen a k := by
+      rw [hs_pred]
+      exact canonicalOddCFGap_boundary_pred_endpoint_to_first a (hpos k)
+    rcases hl_cases with hl | hl
+    · subst l
+      have hfirst_le :
+          CFBlockDenominator a (k + 1) 1 ≤
+            CFBlockDenominator a (k + 1) u :=
+        CFBlockDenominator_le_of_index_le a hlu.1
+      rw [← hgap_first]
+      unfold CanonicalOddCFGap
+      exact Nat.sub_le_sub_right hfirst_le _
+    · subst l
+      have hfirst_le :
+          CFBlockDenominator a (k + 1) 1 ≤
+            CFBlockDenominator a (k + 2) u :=
+        CFBlockDenominator_next_block_first_le_two_step a hpos hlu.1
+      rw [← hgap_first]
+      unfold CanonicalOddCFGap
+      exact Nat.sub_le_sub_right hfirst_le _
+
+/-- Cross-block part of the non-first middle comparison. -/
+lemma same_block_gap_le_next_gap_of_middle_not_first_cross_block
+    {a : ℕ → ℕ}
+    (hpos : ∀ j : ℕ, 0 < a (j + 1))
+    {t k s l u : ℕ}
+    (hprev : ConsecutiveSelected a k t k s)
+    (hnext : ConsecutiveSelected a k s l u)
+    (_hnotfirst : ¬ IsFirstSelectedInBlock a k s)
+    (hkl : k < l) :
+    CanonicalOddCFGap a k t k s ≤ CanonicalOddCFGap a k s l u := by
+  by_cases hEven : Even (continuantNum a k)
+  · have hin :
+        CanonicalOddCFGap a k t k s = continuantDen a k :=
+      same_block_gap_eq_q_of_consecutive_selected_curr_even hprev hEven
+    have hout :
+        continuantDen a k ≤ CanonicalOddCFGap a k s l u :=
+      one_q_le_outgoing_gap_of_consecutive_selected_leaves_block
+        hpos hnext hkl
+    simpa [hin] using hout
+  · have hOdd : Odd (continuantNum a k) :=
+      Nat.not_even_iff_odd.mp hEven
+    have hin :
+        CanonicalOddCFGap a k t k s = 2 * continuantDen a k :=
+      same_block_gap_eq_two_q_of_consecutive_selected_curr_odd hprev hOdd
+    have hout :
+        2 * continuantDen a k ≤ CanonicalOddCFGap a k s l u :=
+      two_q_le_outgoing_gap_of_odd_middle_notfirst_leaves_block
+        hpos hnext hkl hOdd
+    simpa [hin] using hout
+
+/-- Non-first middle comparison, combining the same-block and cross-block
+outgoing cases. -/
+lemma same_block_gap_le_next_gap_of_middle_not_first
+    {a : ℕ → ℕ}
+    (hpos : ∀ j : ℕ, 0 < a (j + 1))
+    {t k s l u : ℕ}
+    (hprev : ConsecutiveSelected a k t k s)
+    (hnext : ConsecutiveSelected a k s l u)
+    (hnotfirst : ¬ IsFirstSelectedInBlock a k s) :
+    CanonicalOddCFGap a k t k s ≤ CanonicalOddCFGap a k s l u := by
+  by_cases hsame : l = k
+  · subst l
+    exact same_block_gap_le_next_gap_of_middle_not_first_same_block
+      hprev hnext
+  · have hkl : k < l :=
+      block_lt_of_consecutive_selected_ne hnext hsame
+    exact same_block_gap_le_next_gap_of_middle_not_first_cross_block
+      hpos hprev hnext hnotfirst hkl
+
+/-- Consecutive gaps in the parity-selected canonical denominator path are
+nondecreasing under positive partial quotients. -/
+theorem canonicalOddDenominatorGapsNondecreasing_of_partials_pos
+    {a : ℕ → ℕ}
+    (hpos : ∀ j : ℕ, 0 < a (j + 1)) :
+    CanonicalOddDenominatorGapsNondecreasing a := by
+  intro j t k s l u hprev hnext
+  by_cases hfirst : IsFirstSelectedInBlock a k s
+  · exact boundary_gap_le_next_gap_of_middle_first
+      hpos hprev hnext hfirst
+  · have hjk : j = k :=
+      prev_block_eq_of_not_first_middle hprev hfirst
+    subst j
+    exact same_block_gap_le_next_gap_of_middle_not_first
+      hpos hprev hnext hfirst
+
+/-- Consecutive gaps in the selected denominator set are nondecreasing.
+
+This is the set-level transfer of
+`canonicalOddDenominatorGapsNondecreasing_of_partials_pos`: ordinary order
+of denominators is identified with the canonical block-index order, then the
+canonical theorem supplies the gap comparison. -/
+theorem oddBlockDenominatorSet_gaps_nondecreasing_of_partials_pos
+    {a : ℕ → ℕ}
+    (hpos : ∀ j : ℕ, 0 < a (j + 1)) :
+    OddBlockDenominatorSetGapsNondecreasing a := by
+  unfold OddBlockDenominatorSetGapsNondecreasing
+    SetConsecutiveGapsNondecreasing
+  intro x y z hx hy hz hxy hyz hnone_xy hnone_yz
+  rcases hx with ⟨j, t, ht1, htle, hodd, hQx, hx_eq⟩
+  rcases hy with ⟨k, s, hs1, hsle, hsodd, hQy, hy_eq⟩
+  rcases hz with ⟨l, u, hu1, hule, huodd, _hQz, hz_eq⟩
+  have hjt : CanonicalOddCFIndex a j t := ⟨ht1, htle, hodd⟩
+  have hks : CanonicalOddCFIndex a k s := ⟨hs1, hsle, hsodd⟩
+  have hlu : CanonicalOddCFIndex a l u := ⟨hu1, hule, huodd⟩
+  have hprev : ConsecutiveSelected a j t k s :=
+    ConsecutiveSelected_of_oddBlockDenominatorSet_consecutive
+      (a := a) hpos hjt hks hQx hx_eq hy_eq hxy hnone_xy
+  have hnext : ConsecutiveSelected a k s l u :=
+    ConsecutiveSelected_of_oddBlockDenominatorSet_consecutive
+      (a := a) hpos hks hlu hQy hy_eq hz_eq hyz hnone_yz
+  have hcanon :=
+    canonicalOddDenominatorGapsNondecreasing_of_partials_pos
+      (a := a) hpos j t k s l u hprev hnext
+  unfold CanonicalOddCFGap at hcanon
+  simpa [hx_eq, hy_eq, hz_eq] using hcanon
+
+/-- Positive partial quotients force nondecreasing gaps in the shifted
+coefficient-side set `oddBlockASet`. -/
+theorem oddBlockASet_gaps_nondecreasing_of_partials_pos
+    {a : ℕ → ℕ}
+    (hpos : ∀ j : ℕ, 0 < a (j + 1)) :
+    OddBlockASetGapsNondecreasing a :=
+  oddBlockASet_gaps_nondecreasing_of_denominatorSet
+    (oddBlockDenominatorSet_gaps_nondecreasing_of_partials_pos hpos)
 
 lemma canonicalBlockLength_le_partialQuotient (a : ℕ → ℕ) (j : ℕ) :
     canonicalBlockLength a j ≤ a (j + 1) := by
@@ -2861,6 +3908,98 @@ theorem A_eq_oddBlockASet_of_IsSimpleCFExpansion
     · refine ⟨a, hcf, Or.inr ?_⟩
       exact ⟨j, t, ht1, htle, rfl, rfl⟩
 
+/-- Gap monotonicity transfers from any chosen coefficient-side odd block
+description to the actual floor-sum set `A α`. -/
+theorem AGapsNondecreasing_of_IsSimpleCFExpansion
+    {α : ℝ} {a : ℕ → ℕ}
+    (hαpos : 0 < α)
+    (hαirr : IsIrrational α)
+    (hcf : IsSimpleCFExpansion α a)
+    (hgap : OddBlockASetGapsNondecreasing a) :
+    AGapsNondecreasing α := by
+  simpa [AGapsNondecreasing, OddBlockASetGapsNondecreasing,
+    A_eq_oddBlockASet_of_IsSimpleCFExpansion hαpos hαirr hcf] using hgap
+
+/-- Denominator-side selected-block gap monotonicity is enough to prove
+gap monotonicity of the actual floor-sum set. -/
+theorem AGapsNondecreasing_of_oddBlockDenominatorSet
+    {α : ℝ} {a : ℕ → ℕ}
+    (hαpos : 0 < α)
+    (hαirr : IsIrrational α)
+    (hcf : IsSimpleCFExpansion α a)
+    (hD : OddBlockDenominatorSetGapsNondecreasing a) :
+    AGapsNondecreasing α :=
+  AGapsNondecreasing_of_IsSimpleCFExpansion hαpos hαirr hcf
+    (oddBlockASet_gaps_nondecreasing_of_denominatorSet hD)
+
+/-- Any chosen simple continued-fraction expansion with positive partial
+quotients gives nondecreasing gaps in the actual floor-sum set `A α`. -/
+theorem AGapsNondecreasing_of_IsSimpleCFExpansion_partials_pos
+    {α : ℝ} {a : ℕ → ℕ}
+    (hαpos : 0 < α)
+    (hαirr : IsIrrational α)
+    (hcf : IsSimpleCFExpansion α a)
+    (hpos : ∀ j : ℕ, 0 < a (j + 1)) :
+    AGapsNondecreasing α :=
+  AGapsNondecreasing_of_oddBlockDenominatorSet hαpos hαirr hcf
+    (oddBlockDenominatorSet_gaps_nondecreasing_of_partials_pos hpos)
+
+/-- Canonical partial quotients give the same gap-monotonicity transfer
+without explicitly passing a coefficient sequence. -/
+theorem AGapsNondecreasing_of_simplePartialQuotient
+    {α : ℝ}
+    (hαpos : 0 < α)
+    (hαirr : IsIrrational α)
+    (hgap :
+      OddBlockASetGapsNondecreasing (simplePartialQuotient α)) :
+    AGapsNondecreasing α :=
+  AGapsNondecreasing_of_IsSimpleCFExpansion hαpos hαirr
+    (simplePartialQuotient_isSimpleCFExpansion hαpos hαirr) hgap
+
+/-- Positive irrational numbers have nondecreasing consecutive gaps in `A α`.
+
+This is the public canonical continued-fraction packaging of the denominator
+gap monotonicity theorem. -/
+theorem AGapsNondecreasing_of_pos_irrational
+    {α : ℝ}
+    (hαpos : 0 < α)
+    (hαirr : IsIrrational α) :
+    AGapsNondecreasing α := by
+  let a : ℕ → ℕ := simplePartialQuotient α
+  have hcf : IsSimpleCFExpansion α a :=
+    simplePartialQuotient_isSimpleCFExpansion hαpos hαirr
+  exact AGapsNondecreasing_of_IsSimpleCFExpansion_partials_pos
+    hαpos hαirr hcf hcf.1
+
+/-- For any chosen simple continued-fraction expansion, the coefficient-side
+truncation agrees with the floor-sum truncation. -/
+theorem oddBlockASetTrunc_eq_visibleFloorSumASet_of_IsSimpleCFExpansion
+    {α : ℝ} {a : ℕ → ℕ}
+    (hαpos : 0 < α)
+    (hαirr : IsIrrational α)
+    (hcf : IsSimpleCFExpansion α a)
+    (N : ℕ) :
+    oddBlockASetTrunc a N = visibleFloorSumASet α N := by
+  ext n
+  rw [mem_oddBlockASetTrunc_iff, mem_visibleFloorSumASet_iff,
+    A_eq_oddBlockASet_of_IsSimpleCFExpansion hαpos hαirr hcf]
+
+/-- The visible canonical set, after removing the possible initial `0`, agrees
+with the denominator-truncated floor-sum set for any chosen simple
+continued-fraction expansion. -/
+theorem visibleCanonicalDenominatorSet_erase_zero_eq_visibleFloorSumASet
+    {α : ℝ} {a : ℕ → ℕ}
+    (hαpos : 0 < α)
+    (hαirr : IsIrrational α)
+    (hcf : IsSimpleCFExpansion α a)
+    (N : ℕ) :
+    (visibleCanonicalDenominatorSet a N).erase 0 =
+      visibleFloorSumASet α N :=
+  (visibleCanonicalDenominatorSet_erase_zero_eq_oddBlockASetTrunc
+    hcf.1 N).trans
+      (oddBlockASetTrunc_eq_visibleFloorSumASet_of_IsSimpleCFExpansion
+        hαpos hαirr hcf N)
+
 /-- Every non-initial block denominator is at least `2`. -/
 lemma two_le_CFBlockDenominator_of_one_le_index
     {a : ℕ → ℕ}
@@ -2884,6 +4023,55 @@ lemma two_le_CFBlockDenominator_of_one_le_index
         continuantDenPrev a (k + 1) + t * continuantDen a (k + 1) :=
     Nat.add_le_add hprev hcurr
   simpa [CFBlockDenominator, Nat.succ_eq_add_one] using hsum
+
+lemma mem_positiveVisibleCanonicalDenominatorSet_of_mem_canonicalOddBlock
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1))
+    {N j t : ℕ}
+    (hjpos : 0 < j)
+    (hjN : continuantDen a (j + 1) ≤ N)
+    (ht : t ∈ canonicalOddBlock a j) :
+    CFBlockDenominator a j t - 1 ∈
+      positiveVisibleCanonicalDenominatorSet a N := by
+  have hsel := mem_canonicalOddBlock_iff.mp ht
+  have hqmem :
+      CFBlockDenominator a j t - 1 ∈ canonicalOddDenominatorBlock a j := by
+    rw [canonicalOddDenominatorBlock, Finset.mem_image]
+    exact ⟨t, ht, rfl⟩
+  have hraw :
+      CFBlockDenominator a j t - 1 ∈ visibleCanonicalDenominatorSet a N :=
+    canonicalOddDenominatorBlock_subset_visibleSet_of_endpoint_le
+      hpos hjN hqmem
+  have hQ2 : 2 ≤ CFBlockDenominator a j t :=
+    two_le_CFBlockDenominator_of_one_le_index hpos
+      (Nat.succ_le_of_lt hjpos) hsel.1
+  have hne : CFBlockDenominator a j t - 1 ≠ 0 := by
+    omega
+  rw [positiveVisibleCanonicalDenominatorSet, Finset.mem_erase]
+  exact ⟨hne, hraw⟩
+
+theorem fullPositiveCanonicalBlock_additive_lower_bridge
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1))
+    {N j : ℕ}
+    (hjpos : 0 < j)
+    (hjN : continuantDen a (j + 1) ≤ N) :
+    canonicalBlockLength a j
+      ≤ popularDifferenceUpTo (positiveVisibleCanonicalDenominatorSet a N) N ∧
+    (canonicalBlockLength a j) ^ 3
+      ≤ 2 * additiveEnergy (positiveVisibleCanonicalDenominatorSet a N) ∧
+    ∀ h : ℕ,
+      2 ^ h ≤ canonicalBlockLength a j →
+        HasProperHilbertCube (positiveVisibleCanonicalDenominatorSet a N) h := by
+  exact fullCanonicalBlock_additive_lower_bridge_of_block_subset
+    (a := a) hpos
+    (S := positiveVisibleCanonicalDenominatorSet a N)
+    (N := N) (j := j)
+    (by
+      intro t ht
+      exact mem_positiveVisibleCanonicalDenominatorSet_of_mem_canonicalOddBlock
+        hpos hjpos hjN ht)
+    hjN
 
 lemma one_le_canonicalBlockGrowth (a : ℕ → ℕ) (N : ℕ) :
     1 ≤ canonicalBlockGrowth a N := by
@@ -4106,6 +5294,29 @@ lemma visibleCanonicalDenominatorSet_card_le_cap
       Finset.card_le_card hsub
     _ = N := by simp
 
+lemma positiveVisibleCanonicalDenominatorSet_card_le_cap
+    (a : ℕ → ℕ) (N : ℕ) :
+    (positiveVisibleCanonicalDenominatorSet a N).card ≤ N := by
+  calc
+    (positiveVisibleCanonicalDenominatorSet a N).card
+        ≤ (visibleCanonicalDenominatorSet a N).card := by
+          unfold positiveVisibleCanonicalDenominatorSet
+          exact Finset.card_erase_le
+    _ ≤ N := visibleCanonicalDenominatorSet_card_le_cap a N
+
+lemma visibleFloorSumASet_card_le_cap
+    (r : ℝ) (N : ℕ) :
+    (visibleFloorSumASet r N).card ≤ N := by
+  classical
+  have hsub : visibleFloorSumASet r N ⊆ Finset.range N := by
+    intro q hq
+    rw [visibleFloorSumASet, Finset.mem_filter] at hq
+    exact hq.1
+  calc
+    (visibleFloorSumASet r N).card ≤ (Finset.range N).card :=
+      Finset.card_le_card hsub
+    _ = N := by simp
+
 lemma visiblePopularDifference_ratio_nonneg_eventually
     (a : ℕ → ℕ) :
     ∀ᶠ N : ℕ in atTop,
@@ -4123,6 +5334,50 @@ lemma visiblePopularDifference_ratio_nonneg_eventually
         exact_mod_cast
           one_le_popularDifferenceUpTo
             (visibleCanonicalDenominatorSet a N) N)
+  have hden_nonneg : 0 ≤ Real.log (N : ℝ) :=
+    Real.log_nonneg (by exact_mod_cast hN)
+  exact div_nonneg hnum_nonneg hden_nonneg
+
+lemma positiveVisiblePopularDifference_ratio_nonneg_eventually
+    (a : ℕ → ℕ) :
+    ∀ᶠ N : ℕ in atTop,
+      0 ≤
+        Real.log
+            (popularDifferenceUpTo
+              (positiveVisibleCanonicalDenominatorSet a N) N : ℝ) /
+          Real.log (N : ℝ) := by
+  refine (eventually_ge_atTop 1).mono ?_
+  intro N hN
+  have hnum_nonneg :
+      0 ≤ Real.log
+        (popularDifferenceUpTo
+          (positiveVisibleCanonicalDenominatorSet a N) N : ℝ) :=
+    Real.log_nonneg
+      (by
+        exact_mod_cast
+          one_le_popularDifferenceUpTo
+            (positiveVisibleCanonicalDenominatorSet a N) N)
+  have hden_nonneg : 0 ≤ Real.log (N : ℝ) :=
+    Real.log_nonneg (by exact_mod_cast hN)
+  exact div_nonneg hnum_nonneg hden_nonneg
+
+lemma floorSumAPopularDifference_ratio_nonneg_eventually
+    (r : ℝ) :
+    ∀ᶠ N : ℕ in atTop,
+      0 ≤
+        Real.log
+            (popularDifferenceUpTo (visibleFloorSumASet r N) N : ℝ) /
+          Real.log (N : ℝ) := by
+  refine (eventually_ge_atTop 1).mono ?_
+  intro N hN
+  have hnum_nonneg :
+      0 ≤ Real.log
+        (popularDifferenceUpTo (visibleFloorSumASet r N) N : ℝ) :=
+    Real.log_nonneg
+      (by
+        exact_mod_cast
+          one_le_popularDifferenceUpTo
+            (visibleFloorSumASet r N) N)
   have hden_nonneg : 0 ≤ Real.log (N : ℝ) :=
     Real.log_nonneg (by exact_mod_cast hN)
   exact div_nonneg hnum_nonneg hden_nonneg
@@ -4172,6 +5427,98 @@ lemma visiblePopularDifference_ratio_le_two_eventually
   rw [hright] at hdiv
   simpa [P] using hdiv
 
+lemma positiveVisiblePopularDifference_ratio_le_two_eventually
+    (a : ℕ → ℕ) :
+    ∀ᶠ N : ℕ in atTop,
+      Real.log
+          (popularDifferenceUpTo
+            (positiveVisibleCanonicalDenominatorSet a N) N : ℝ) /
+        Real.log (N : ℝ) ≤ 2 := by
+  refine (eventually_ge_atTop 2).mono ?_
+  intro N hN
+  let P : ℕ :=
+    popularDifferenceUpTo (positiveVisibleCanonicalDenominatorSet a N) N
+  have hP_le_succ : P ≤ N + 1 := by
+    dsimp [P]
+    exact (popularDifferenceUpTo_le_card_add_one
+      (positiveVisibleCanonicalDenominatorSet a N) N).trans
+        (by
+          have hcard := positiveVisibleCanonicalDenominatorSet_card_le_cap a N
+          omega)
+  have hP_le_sq : P ≤ N ^ 2 := by
+    have hsq : N + 1 ≤ N ^ 2 := by
+      rw [pow_two]
+      nlinarith
+    exact hP_le_succ.trans hsq
+  have hPpos : 0 < (P : ℝ) := by
+    exact_mod_cast
+      (lt_of_lt_of_le Nat.zero_lt_one
+        (one_le_popularDifferenceUpTo
+          (positiveVisibleCanonicalDenominatorSet a N) N))
+  have hlog_le :
+      Real.log (P : ℝ) ≤ Real.log ((N ^ 2 : ℕ) : ℝ) :=
+    Real.log_le_log hPpos (by exact_mod_cast hP_le_sq)
+  have hlogNpos : 0 < Real.log (N : ℝ) :=
+    Real.log_pos (by exact_mod_cast hN)
+  have hdiv :
+      Real.log (P : ℝ) / Real.log (N : ℝ) ≤
+        Real.log ((N ^ 2 : ℕ) : ℝ) / Real.log (N : ℝ) :=
+    div_le_div_of_nonneg_right hlog_le hlogNpos.le
+  have hpowlog :
+      Real.log ((N ^ 2 : ℕ) : ℝ) = 2 * Real.log (N : ℝ) := by
+    norm_num [Nat.cast_pow, Real.log_pow]
+  have hright :
+      Real.log ((N ^ 2 : ℕ) : ℝ) / Real.log (N : ℝ) = 2 := by
+    rw [hpowlog]
+    field_simp [hlogNpos.ne']
+  rw [hright] at hdiv
+  simpa [P] using hdiv
+
+lemma floorSumAPopularDifference_ratio_le_two_eventually
+    (r : ℝ) :
+    ∀ᶠ N : ℕ in atTop,
+      Real.log
+          (popularDifferenceUpTo (visibleFloorSumASet r N) N : ℝ) /
+        Real.log (N : ℝ) ≤ 2 := by
+  refine (eventually_ge_atTop 2).mono ?_
+  intro N hN
+  let P : ℕ := popularDifferenceUpTo (visibleFloorSumASet r N) N
+  have hP_le_succ : P ≤ N + 1 := by
+    dsimp [P]
+    exact (popularDifferenceUpTo_le_card_add_one
+      (visibleFloorSumASet r N) N).trans
+        (by
+          have hcard := visibleFloorSumASet_card_le_cap r N
+          omega)
+  have hP_le_sq : P ≤ N ^ 2 := by
+    have hsq : N + 1 ≤ N ^ 2 := by
+      rw [pow_two]
+      nlinarith
+    exact hP_le_succ.trans hsq
+  have hPpos : 0 < (P : ℝ) := by
+    exact_mod_cast
+      (lt_of_lt_of_le Nat.zero_lt_one
+        (one_le_popularDifferenceUpTo
+          (visibleFloorSumASet r N) N))
+  have hlog_le :
+      Real.log (P : ℝ) ≤ Real.log ((N ^ 2 : ℕ) : ℝ) :=
+    Real.log_le_log hPpos (by exact_mod_cast hP_le_sq)
+  have hlogNpos : 0 < Real.log (N : ℝ) :=
+    Real.log_pos (by exact_mod_cast hN)
+  have hdiv :
+      Real.log (P : ℝ) / Real.log (N : ℝ) ≤
+        Real.log ((N ^ 2 : ℕ) : ℝ) / Real.log (N : ℝ) :=
+    div_le_div_of_nonneg_right hlog_le hlogNpos.le
+  have hpowlog :
+      Real.log ((N ^ 2 : ℕ) : ℝ) = 2 * Real.log (N : ℝ) := by
+    norm_num [Nat.cast_pow, Real.log_pow]
+  have hright :
+      Real.log ((N ^ 2 : ℕ) : ℝ) / Real.log (N : ℝ) = 2 := by
+    rw [hpowlog]
+    field_simp [hlogNpos.ne']
+  rw [hright] at hdiv
+  simpa [P] using hdiv
+
 lemma canonicalBlockGrowth_le_visiblePopularDifference
     {a : ℕ → ℕ}
     (hpos : ∀ n : ℕ, 0 < a (n + 1))
@@ -4184,6 +5531,152 @@ lemma canonicalBlockGrowth_le_visiblePopularDifference
     (fun j _hj hden =>
       (fullCanonicalBlock_additive_lower_bridge
         (a := a) hpos (N := N) (j := j) hden).1)
+
+theorem canonicalBlockExponent_le_positiveVisiblePopularDifferenceExponent
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1)) :
+    canonicalBlockExponent a ≤
+      positiveVisiblePopularDifferenceExponent a := by
+  let G : ℕ → ℝ := fun j =>
+    Real.log (canonicalSafeBlockLength a j : ℝ) /
+      Real.log (continuantDen a (j + 1) : ℝ)
+  let P : ℕ → ℝ := fun N =>
+    Real.log
+        (popularDifferenceUpTo
+          (positiveVisibleCanonicalDenominatorSet a N) N : ℝ) /
+      Real.log (N : ℝ)
+  let Q : ℕ → ℕ := fun j => continuantDen a (j + 1)
+  have hQ : Tendsto Q atTop atTop := by
+    exact (Filter.tendsto_add_atTop_iff_nat
+      (f := continuantDen a) 1).2
+      (continuantDen_tendsto_atTop_of_partials_pos hpos)
+  have hGP : G ≤ᶠ[atTop] P ∘ Q := by
+    filter_upwards [eventually_ge_atTop 1, hQ.eventually_gt_atTop 1]
+      with j hj1 hQgt1
+    let N : ℕ := continuantDen a (j + 1)
+    let R : ℕ :=
+      popularDifferenceUpTo (positiveVisibleCanonicalDenominatorSet a N) N
+    have hjpos : 0 < j := lt_of_lt_of_le Nat.zero_lt_one hj1
+    have hlen_le_R : canonicalBlockLength a j ≤ R := by
+      dsimp [R, N]
+      exact (fullPositiveCanonicalBlock_additive_lower_bridge
+        (a := a) hpos (N := continuantDen a (j + 1)) (j := j)
+        hjpos le_rfl).1
+    have hsafe_le_R : canonicalSafeBlockLength a j ≤ R := by
+      unfold canonicalSafeBlockLength
+      exact max_le
+        (one_le_popularDifferenceUpTo
+          (positiveVisibleCanonicalDenominatorSet a N) N)
+        hlen_le_R
+    have hsafe_pos : 0 < (canonicalSafeBlockLength a j : ℝ) := by
+      exact_mod_cast
+        (lt_of_lt_of_le Nat.zero_lt_one
+          (one_le_canonicalSafeBlockLength a j))
+    have hlog_le :
+        Real.log (canonicalSafeBlockLength a j : ℝ) ≤
+          Real.log (R : ℝ) :=
+      Real.log_le_log hsafe_pos (by exact_mod_cast hsafe_le_R)
+    have hlogNpos : 0 < Real.log (N : ℝ) :=
+      Real.log_pos (by exact_mod_cast hQgt1)
+    have hdiv :
+        Real.log (canonicalSafeBlockLength a j : ℝ) / Real.log (N : ℝ) ≤
+          Real.log (R : ℝ) / Real.log (N : ℝ) :=
+      div_le_div_of_nonneg_right hlog_le hlogNpos.le
+    simpa [G, P, Q, Function.comp_def, N, R] using hdiv
+  have hGcobdd :
+      Filter.IsCoboundedUnder (fun x y : ℝ => x ≤ y) atTop G :=
+    Filter.IsCoboundedUnder.of_frequently_ge
+      ((endpoint_safeBlock_ratio_nonneg_eventually hpos).frequently.mono
+        (fun j hj => by simpa [G] using hj))
+  have hPcomp_bdd :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop (P ∘ Q) :=
+    Filter.isBoundedUnder_of_eventually_le
+      (by
+        filter_upwards [hQ.eventually
+          (positiveVisiblePopularDifference_ratio_le_two_eventually a)]
+          with j hj
+        simpa [P, Q, Function.comp_def] using hj)
+  have hendpoint_le_comp : limsup G atTop ≤ limsup (P ∘ Q) atTop :=
+    Filter.limsup_le_limsup hGP hGcobdd hPcomp_bdd
+  have hPbdd :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop P :=
+    Filter.isBoundedUnder_of_eventually_le
+      (by
+        filter_upwards [positiveVisiblePopularDifference_ratio_le_two_eventually a]
+          with N hN
+        simpa [P] using hN)
+  have hPnonneg_map :
+      ∀ᶠ N : ℕ in Filter.map Q atTop, 0 ≤ P N := by
+    exact hQ
+      (by
+        filter_upwards [positiveVisiblePopularDifference_ratio_nonneg_eventually a]
+          with N hN
+        simpa [P] using hN)
+  have hPmap_cobdd :
+      Filter.IsCoboundedUnder (fun x y : ℝ => x ≤ y)
+        (Filter.map Q atTop) P :=
+    Filter.IsCoboundedUnder.of_frequently_ge hPnonneg_map.frequently
+  have hcomp_le_P : limsup (P ∘ Q) atTop ≤ limsup P atTop :=
+    Filter.Tendsto.limsup_comp_le_limsup hQ hPmap_cobdd hPbdd
+  have hcanon :
+      canonicalBlockExponent a = limsup G atTop := by
+    simpa [G] using canonicalBlockExponent_eq_limsup_endpoint_safeBlock_ratio
+      (a := a) hpos
+  rw [hcanon]
+  exact hendpoint_le_comp.trans hcomp_le_P
+
+theorem positiveVisiblePopularDifferenceExponent_le_visiblePopularDifferenceExponent
+    {a : ℕ → ℕ} :
+    positiveVisiblePopularDifferenceExponent a ≤
+      visiblePopularDifferenceExponent a := by
+  let P : ℕ → ℝ := fun N =>
+    Real.log
+        (popularDifferenceUpTo
+          (positiveVisibleCanonicalDenominatorSet a N) N : ℝ) /
+      Real.log (N : ℝ)
+  let V : ℕ → ℝ := fun N =>
+    Real.log
+        (popularDifferenceUpTo (visibleCanonicalDenominatorSet a N) N : ℝ) /
+      Real.log (N : ℝ)
+  have hPV : P ≤ᶠ[atTop] V := by
+    refine (eventually_ge_atTop 2).mono ?_
+    intro N hN
+    let PP : ℕ :=
+      popularDifferenceUpTo (positiveVisibleCanonicalDenominatorSet a N) N
+    let PV : ℕ := popularDifferenceUpTo (visibleCanonicalDenominatorSet a N) N
+    have hPPpos : 0 < (PP : ℝ) := by
+      dsimp [PP]
+      exact_mod_cast
+        (lt_of_lt_of_le Nat.zero_lt_one
+          (one_le_popularDifferenceUpTo
+            (positiveVisibleCanonicalDenominatorSet a N) N))
+    have hPP_le_PV : PP ≤ PV := by
+      dsimp [PP, PV]
+      exact popularDifferenceUpTo_mono
+        (by
+          unfold positiveVisibleCanonicalDenominatorSet
+          exact Finset.erase_subset _ _)
+        N
+    have hlog_le : Real.log (PP : ℝ) ≤ Real.log (PV : ℝ) :=
+      Real.log_le_log hPPpos (by exact_mod_cast hPP_le_PV)
+    have hlogNpos : 0 < Real.log (N : ℝ) :=
+      Real.log_pos (by exact_mod_cast hN)
+    exact div_le_div_of_nonneg_right hlog_le hlogNpos.le
+  have hPcobdd :
+      Filter.IsCoboundedUnder (fun x y : ℝ => x ≤ y) atTop P :=
+    Filter.IsCoboundedUnder.of_frequently_ge
+      ((positiveVisiblePopularDifference_ratio_nonneg_eventually a).frequently.mono
+        (fun N hN => by simpa [P] using hN))
+  have hVbdd :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop V :=
+    Filter.isBoundedUnder_of_eventually_le
+      (by
+        filter_upwards [visiblePopularDifference_ratio_le_two_eventually a]
+          with N hN
+        simpa [V] using hN)
+  have hlim := Filter.limsup_le_limsup hPV hPcobdd hVbdd
+  simpa [positiveVisiblePopularDifferenceExponent,
+    visiblePopularDifferenceExponent, P, V] using hlim
 
 lemma log_popular_le_log_visibleBlockMax_add_log_log_error
     {a : ℕ → ℕ}
@@ -4373,6 +5866,20 @@ theorem visiblePopularDifferenceExponent_eq_canonicalBlockExponent
     (visiblePopularDifferenceExponent_le_canonicalBlockExponent hpos)
     (canonicalBlockExponent_le_visiblePopularDifferenceExponent hpos)
 
+theorem positiveVisiblePopularDifferenceExponent_eq_canonicalBlockExponent
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1)) :
+    positiveVisiblePopularDifferenceExponent a =
+      canonicalBlockExponent a := by
+  apply le_antisymm
+  · calc
+      positiveVisiblePopularDifferenceExponent a
+          ≤ visiblePopularDifferenceExponent a :=
+            positiveVisiblePopularDifferenceExponent_le_visiblePopularDifferenceExponent
+      _ = canonicalBlockExponent a :=
+            visiblePopularDifferenceExponent_eq_canonicalBlockExponent hpos
+  · exact canonicalBlockExponent_le_positiveVisiblePopularDifferenceExponent hpos
+
 lemma visibleAdditiveEnergy_ratio_nonneg_eventually
     (a : ℕ → ℕ) :
     ∀ᶠ N : ℕ in atTop,
@@ -4383,6 +5890,47 @@ lemma visibleAdditiveEnergy_ratio_nonneg_eventually
   refine (eventually_ge_atTop 1).mono ?_
   intro N hN
   let E : ℕ := additiveEnergy (visibleCanonicalDenominatorSet a N)
+  have hlogE_nonneg : 0 ≤ Real.log (E : ℝ) := by
+    by_cases hE0 : E = 0
+    · simp [hE0]
+    · exact Real.log_nonneg
+        (by
+          exact_mod_cast Nat.succ_le_of_lt (Nat.pos_of_ne_zero hE0))
+  have hden_nonneg : 0 ≤ Real.log (N : ℝ) :=
+    Real.log_nonneg (by exact_mod_cast hN)
+  exact div_nonneg hlogE_nonneg hden_nonneg
+
+lemma positiveVisibleAdditiveEnergy_ratio_nonneg_eventually
+    (a : ℕ → ℕ) :
+    ∀ᶠ N : ℕ in atTop,
+      0 ≤
+        Real.log
+            (additiveEnergy
+              (positiveVisibleCanonicalDenominatorSet a N) : ℝ) /
+          Real.log (N : ℝ) := by
+  refine (eventually_ge_atTop 1).mono ?_
+  intro N hN
+  let E : ℕ := additiveEnergy (positiveVisibleCanonicalDenominatorSet a N)
+  have hlogE_nonneg : 0 ≤ Real.log (E : ℝ) := by
+    by_cases hE0 : E = 0
+    · simp [hE0]
+    · exact Real.log_nonneg
+        (by
+          exact_mod_cast Nat.succ_le_of_lt (Nat.pos_of_ne_zero hE0))
+  have hden_nonneg : 0 ≤ Real.log (N : ℝ) :=
+    Real.log_nonneg (by exact_mod_cast hN)
+  exact div_nonneg hlogE_nonneg hden_nonneg
+
+lemma floorSumAAdditiveEnergy_ratio_nonneg_eventually
+    (r : ℝ) :
+    ∀ᶠ N : ℕ in atTop,
+      0 ≤
+        Real.log
+            (additiveEnergy (visibleFloorSumASet r N) : ℝ) /
+          Real.log (N : ℝ) := by
+  refine (eventually_ge_atTop 1).mono ?_
+  intro N hN
+  let E : ℕ := additiveEnergy (visibleFloorSumASet r N)
   have hlogE_nonneg : 0 ≤ Real.log (E : ℝ) := by
     by_cases hE0 : E = 0
     · simp [hE0]
@@ -4410,6 +5958,83 @@ lemma visibleAdditiveEnergy_ratio_le_three_eventually
         (visibleCanonicalDenominatorSet a N)).trans
           (Nat.pow_le_pow_left
             (visibleCanonicalDenominatorSet_card_le_cap a N) 3)
+    have hEpos : 0 < (E : ℝ) := by
+      exact_mod_cast Nat.pos_of_ne_zero hE0
+    have hlog_le :
+        Real.log (E : ℝ) ≤ Real.log ((N ^ 3 : ℕ) : ℝ) :=
+      Real.log_le_log hEpos (by exact_mod_cast hE_le)
+    have hlogNpos : 0 < Real.log (N : ℝ) :=
+      Real.log_pos (by exact_mod_cast hN)
+    have hdiv :
+        Real.log (E : ℝ) / Real.log (N : ℝ) ≤
+          Real.log ((N ^ 3 : ℕ) : ℝ) / Real.log (N : ℝ) :=
+      div_le_div_of_nonneg_right hlog_le hlogNpos.le
+    have hpowlog :
+        Real.log ((N ^ 3 : ℕ) : ℝ) = 3 * Real.log (N : ℝ) := by
+      norm_num [Nat.cast_pow, Real.log_pow]
+    have hright :
+        Real.log ((N ^ 3 : ℕ) : ℝ) / Real.log (N : ℝ) = 3 := by
+      rw [hpowlog]
+      field_simp [hlogNpos.ne']
+    rw [hright] at hdiv
+    simpa [E] using hdiv
+
+lemma positiveVisibleAdditiveEnergy_ratio_le_three_eventually
+    (a : ℕ → ℕ) :
+    ∀ᶠ N : ℕ in atTop,
+      Real.log
+          (additiveEnergy
+            (positiveVisibleCanonicalDenominatorSet a N) : ℝ) /
+        Real.log (N : ℝ) ≤ 3 := by
+  refine (eventually_ge_atTop 2).mono ?_
+  intro N hN
+  let E : ℕ := additiveEnergy (positiveVisibleCanonicalDenominatorSet a N)
+  by_cases hE0 : E = 0
+  · simp [E, hE0]
+  · have hE_le : E ≤ N ^ 3 := by
+      dsimp [E]
+      exact (additiveEnergy_le_card_cube
+        (positiveVisibleCanonicalDenominatorSet a N)).trans
+          (Nat.pow_le_pow_left
+            (positiveVisibleCanonicalDenominatorSet_card_le_cap a N) 3)
+    have hEpos : 0 < (E : ℝ) := by
+      exact_mod_cast Nat.pos_of_ne_zero hE0
+    have hlog_le :
+        Real.log (E : ℝ) ≤ Real.log ((N ^ 3 : ℕ) : ℝ) :=
+      Real.log_le_log hEpos (by exact_mod_cast hE_le)
+    have hlogNpos : 0 < Real.log (N : ℝ) :=
+      Real.log_pos (by exact_mod_cast hN)
+    have hdiv :
+        Real.log (E : ℝ) / Real.log (N : ℝ) ≤
+          Real.log ((N ^ 3 : ℕ) : ℝ) / Real.log (N : ℝ) :=
+      div_le_div_of_nonneg_right hlog_le hlogNpos.le
+    have hpowlog :
+        Real.log ((N ^ 3 : ℕ) : ℝ) = 3 * Real.log (N : ℝ) := by
+      norm_num [Nat.cast_pow, Real.log_pow]
+    have hright :
+        Real.log ((N ^ 3 : ℕ) : ℝ) / Real.log (N : ℝ) = 3 := by
+      rw [hpowlog]
+      field_simp [hlogNpos.ne']
+    rw [hright] at hdiv
+    simpa [E] using hdiv
+
+lemma floorSumAAdditiveEnergy_ratio_le_three_eventually
+    (r : ℝ) :
+    ∀ᶠ N : ℕ in atTop,
+      Real.log
+          (additiveEnergy (visibleFloorSumASet r N) : ℝ) /
+        Real.log (N : ℝ) ≤ 3 := by
+  refine (eventually_ge_atTop 2).mono ?_
+  intro N hN
+  let E : ℕ := additiveEnergy (visibleFloorSumASet r N)
+  by_cases hE0 : E = 0
+  · simp [E, hE0]
+  · have hE_le : E ≤ N ^ 3 := by
+      dsimp [E]
+      exact (additiveEnergy_le_card_cube
+        (visibleFloorSumASet r N)).trans
+          (Nat.pow_le_pow_left
+            (visibleFloorSumASet_card_le_cap r N) 3)
     have hEpos : 0 < (E : ℝ) := by
       exact_mod_cast Nat.pos_of_ne_zero hE0
     have hlog_le :
@@ -4582,6 +6207,172 @@ lemma visibleAdditiveEnergyExponent_le_three_mul_canonicalBlockExponent
       nlinarith
     exact hfinite.trans hsum
   simpa [visibleAdditiveEnergyExponent, E, M] using hmain
+
+theorem positiveVisibleAdditiveEnergyExponent_le_visibleAdditiveEnergyExponent
+    {a : ℕ → ℕ} :
+    positiveVisibleAdditiveEnergyExponent a ≤
+      visibleAdditiveEnergyExponent a := by
+  let P : ℕ → ℝ := fun N =>
+    Real.log
+        (additiveEnergy (positiveVisibleCanonicalDenominatorSet a N) : ℝ) /
+      Real.log (N : ℝ)
+  let V : ℕ → ℝ := fun N =>
+    Real.log
+        (additiveEnergy (visibleCanonicalDenominatorSet a N) : ℝ) /
+      Real.log (N : ℝ)
+  have hPV : P ≤ᶠ[atTop] V := by
+    filter_upwards [eventually_ge_atTop 2,
+      visibleAdditiveEnergy_ratio_nonneg_eventually a] with N hN hVnonneg
+    let EP : ℕ := additiveEnergy (positiveVisibleCanonicalDenominatorSet a N)
+    let EV : ℕ := additiveEnergy (visibleCanonicalDenominatorSet a N)
+    have hEP_EV : EP ≤ EV := by
+      dsimp [EP, EV]
+      exact additiveEnergy_mono
+        (by
+          unfold positiveVisibleCanonicalDenominatorSet
+          exact Finset.erase_subset _ _)
+    by_cases hEP0 : EP = 0
+    · simpa [P, V, EP, EV, hEP0] using hVnonneg
+    · have hEPpos : 0 < (EP : ℝ) := by
+        exact_mod_cast Nat.pos_of_ne_zero hEP0
+      have hlog_le : Real.log (EP : ℝ) ≤ Real.log (EV : ℝ) :=
+        Real.log_le_log hEPpos (by exact_mod_cast hEP_EV)
+      have hlogNpos : 0 < Real.log (N : ℝ) :=
+        Real.log_pos (by exact_mod_cast hN)
+      simpa [P, V, EP, EV] using
+        div_le_div_of_nonneg_right hlog_le hlogNpos.le
+  have hPcobdd :
+      Filter.IsCoboundedUnder (fun x y : ℝ => x ≤ y) atTop P :=
+    Filter.IsCoboundedUnder.of_frequently_ge
+      ((positiveVisibleAdditiveEnergy_ratio_nonneg_eventually a).frequently.mono
+        (fun N hN => by simpa [P] using hN))
+  have hVbdd :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop V :=
+    Filter.isBoundedUnder_of_eventually_le
+      (by
+        filter_upwards [visibleAdditiveEnergy_ratio_le_three_eventually a]
+          with N hN
+        simpa [V] using hN)
+  have hlim := Filter.limsup_le_limsup hPV hPcobdd hVbdd
+  simpa [positiveVisibleAdditiveEnergyExponent,
+    visibleAdditiveEnergyExponent, P, V] using hlim
+
+lemma three_endpoint_safeBlock_sub_log_two_le_log_positiveVisibleEnergy
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1)) :
+    ∀ᶠ j : ℕ in atTop,
+      3 * (Real.log (canonicalSafeBlockLength a j : ℝ) /
+          Real.log (continuantDen a (j + 1) : ℝ)) -
+        Real.log 2 / Real.log (continuantDen a (j + 1) : ℝ)
+      ≤
+      Real.log
+          (additiveEnergy
+            (positiveVisibleCanonicalDenominatorSet a
+              (continuantDen a (j + 1))) : ℝ) /
+        Real.log (continuantDen a (j + 1) : ℝ) := by
+  have hQ :
+      Tendsto (fun j : ℕ => continuantDen a (j + 1)) atTop atTop := by
+    exact (Filter.tendsto_add_atTop_iff_nat
+      (f := continuantDen a) 1).2
+      (continuantDen_tendsto_atTop_of_partials_pos hpos)
+  filter_upwards [eventually_ge_atTop 1, hQ.eventually_gt_atTop 1]
+    with j hj1 hQgt1
+  let N : ℕ := continuantDen a (j + 1)
+  let L : ℕ := canonicalBlockLength a j
+  let R : ℕ := canonicalSafeBlockLength a j
+  let E : ℕ := additiveEnergy (positiveVisibleCanonicalDenominatorSet a N)
+  have hlogNpos : 0 < Real.log (N : ℝ) :=
+    Real.log_pos (by exact_mod_cast hQgt1)
+  have hElog_nonneg : 0 ≤ Real.log (E : ℝ) := by
+    by_cases hE0 : E = 0
+    · simp [hE0]
+    · exact Real.log_nonneg
+        (by exact_mod_cast Nat.succ_le_of_lt (Nat.pos_of_ne_zero hE0))
+  have hEratio_nonneg :
+      0 ≤ Real.log (E : ℝ) / Real.log (N : ℝ) :=
+    div_nonneg hElog_nonneg hlogNpos.le
+  by_cases hRone : R = 1
+  · have hlogR : Real.log (R : ℝ) = 0 := by
+      rw [hRone]
+      norm_num
+    have hleft_nonpos :
+        3 * (Real.log (R : ℝ) / Real.log (N : ℝ)) -
+          Real.log 2 / Real.log (N : ℝ) ≤ 0 := by
+      have hconst_nonneg :
+          0 ≤ Real.log 2 / Real.log (N : ℝ) := by
+        exact div_nonneg (Real.log_nonneg (by norm_num)) hlogNpos.le
+      rw [hlogR]
+      simp only [zero_div, mul_zero, zero_sub]
+      exact neg_nonpos.mpr hconst_nonneg
+    exact hleft_nonpos.trans hEratio_nonneg
+  · have hRgt1 : 1 < R := by
+      have hRge : 1 ≤ R := by
+        dsimp [R]
+        exact one_le_canonicalSafeBlockLength a j
+      omega
+    have hRleL : R ≤ L := by
+      have hmax : 1 < max 1 L := by
+        simpa [R, canonicalSafeBlockLength] using hRgt1
+      have hLgt1 : 1 < L := by
+        rcases lt_max_iff.mp hmax with hbad | hgood
+        · omega
+        · exact hgood
+      dsimp [R]
+      unfold canonicalSafeBlockLength
+      exact max_le (le_of_lt hLgt1) (le_refl L)
+    have hbridge :
+        L ^ 3 ≤ 2 * E := by
+      dsimp [L, E, N]
+      exact (fullPositiveCanonicalBlock_additive_lower_bridge
+        (a := a) hpos
+        (N := continuantDen a (j + 1)) (j := j)
+        (lt_of_lt_of_le Nat.zero_lt_one hj1) le_rfl).2.1
+    have hRpow_le : R ^ 3 ≤ 2 * E :=
+      (Nat.pow_le_pow_left hRleL 3).trans hbridge
+    have hRpos_nat : 0 < R := lt_trans Nat.zero_lt_one hRgt1
+    have hRpow_pos : 0 < R ^ 3 := pow_pos hRpos_nat 3
+    have hEpos_nat : 0 < E := by
+      have h2Epos : 0 < 2 * E := lt_of_lt_of_le hRpow_pos hRpow_le
+      omega
+    have hRpos : 0 < (R : ℝ) := by exact_mod_cast hRpos_nat
+    have hEpos : 0 < (E : ℝ) := by exact_mod_cast hEpos_nat
+    have hlog_le :
+        Real.log ((R ^ 3 : ℕ) : ℝ) ≤ Real.log ((2 * E : ℕ) : ℝ) :=
+      Real.log_le_log
+        (by exact_mod_cast hRpow_pos)
+        (by exact_mod_cast hRpow_le)
+    have hlogRpow :
+        Real.log ((R ^ 3 : ℕ) : ℝ) = 3 * Real.log (R : ℝ) := by
+      norm_num [Nat.cast_pow, Real.log_pow]
+    have hlog2E :
+        Real.log ((2 * E : ℕ) : ℝ) =
+          Real.log 2 + Real.log (E : ℝ) := by
+      norm_num [Nat.cast_mul]
+      rw [Real.log_mul (by norm_num : (2 : ℝ) ≠ 0) hEpos.ne']
+    have hineq :
+        3 * Real.log (R : ℝ) ≤ Real.log 2 + Real.log (E : ℝ) := by
+      nlinarith
+    have hdiv :
+        (3 * Real.log (R : ℝ)) / Real.log (N : ℝ) ≤
+          (Real.log 2 + Real.log (E : ℝ)) / Real.log (N : ℝ) :=
+      div_le_div_of_nonneg_right hineq hlogNpos.le
+    have hsplit :
+        (Real.log 2 + Real.log (E : ℝ)) / Real.log (N : ℝ) =
+          Real.log 2 / Real.log (N : ℝ) +
+            Real.log (E : ℝ) / Real.log (N : ℝ) := by
+      ring
+    rw [hsplit] at hdiv
+    have hgoal_local :
+        3 * (Real.log (R : ℝ) / Real.log (N : ℝ)) -
+          Real.log 2 / Real.log (N : ℝ) ≤
+        Real.log (E : ℝ) / Real.log (N : ℝ) := by
+      have hthree :
+          3 * (Real.log (R : ℝ) / Real.log (N : ℝ)) =
+            (3 * Real.log (R : ℝ)) / Real.log (N : ℝ) := by
+        ring
+      rw [hthree]
+      nlinarith
+    simpa [N, R, E] using hgoal_local
 
 lemma three_log_canonicalBlockGrowth_sub_log_two_le_log_visibleEnergy
     {a : ℕ → ℕ}
@@ -4761,6 +6552,123 @@ theorem visibleAdditiveEnergyExponent_eq_three_mul_canonicalBlockExponent
     (visibleAdditiveEnergyExponent_le_three_mul_canonicalBlockExponent hpos)
     (three_mul_canonicalBlockExponent_le_visibleAdditiveEnergyExponent hpos)
 
+theorem three_mul_canonicalBlockExponent_le_positiveVisibleAdditiveEnergyExponent
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1)) :
+    3 * canonicalBlockExponent a ≤
+      positiveVisibleAdditiveEnergyExponent a := by
+  let G : ℕ → ℝ := fun j =>
+    Real.log (canonicalSafeBlockLength a j : ℝ) /
+      Real.log (continuantDen a (j + 1) : ℝ)
+  let E : ℕ → ℝ := fun N =>
+    Real.log
+        (additiveEnergy (positiveVisibleCanonicalDenominatorSet a N) : ℝ) /
+      Real.log (N : ℝ)
+  let Q : ℕ → ℕ := fun j => continuantDen a (j + 1)
+  have hQ : Tendsto Q atTop atTop := by
+    exact (Filter.tendsto_add_atTop_iff_nat
+      (f := continuantDen a) 1).2
+      (continuantDen_tendsto_atTop_of_partials_pos hpos)
+  have hGcobdd :
+      Filter.IsCoboundedUnder (fun x y : ℝ => x ≤ y) atTop G :=
+    Filter.IsCoboundedUnder.of_frequently_ge
+      ((endpoint_safeBlock_ratio_nonneg_eventually hpos).frequently.mono
+        (fun j hj => by simpa [G] using hj))
+  have hEcomp_bdd :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop (E ∘ Q) :=
+    Filter.isBoundedUnder_of_eventually_le
+      (by
+        filter_upwards [hQ.eventually
+          (positiveVisibleAdditiveEnergy_ratio_le_three_eventually a)]
+          with j hj
+        simpa [E, Q, Function.comp_def] using hj)
+  have hEbdd :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop E :=
+    Filter.isBoundedUnder_of_eventually_le
+      (by
+        filter_upwards [positiveVisibleAdditiveEnergy_ratio_le_three_eventually a]
+          with N hN
+        simpa [E] using hN)
+  have hEnonneg_map :
+      ∀ᶠ N : ℕ in Filter.map Q atTop, 0 ≤ E N := by
+    exact hQ
+      (by
+        filter_upwards [positiveVisibleAdditiveEnergy_ratio_nonneg_eventually a]
+          with N hN
+        simpa [E] using hN)
+  have hEmap_cobdd :
+      Filter.IsCoboundedUnder (fun x y : ℝ => x ≤ y)
+        (Filter.map Q atTop) E :=
+    Filter.IsCoboundedUnder.of_frequently_ge hEnonneg_map.frequently
+  have hcomp_le_E : limsup (E ∘ Q) atTop ≤ limsup E atTop :=
+    Filter.Tendsto.limsup_comp_le_limsup hQ hEmap_cobdd hEbdd
+  have hmain : 3 * limsup G atTop ≤ limsup E atTop := by
+    refine le_of_forall_lt ?_
+    intro C hC
+    let L : ℝ := limsup G atTop
+    let C₀ : ℝ := (C / 3 + L) / 2
+    have hCdivL : C / 3 < L := by
+      dsimp [L]
+      nlinarith
+    have hC₀L : C₀ < L := by
+      dsimp [C₀]
+      nlinarith
+    have hC_lt_3C₀ : C < 3 * C₀ := by
+      dsimp [C₀]
+      nlinarith
+    let D : ℝ := (C + 3 * C₀) / 2
+    have hCD : C < D := by
+      dsimp [D]
+      nlinarith
+    have hDlt : D < 3 * C₀ := by
+      dsimp [D]
+      nlinarith
+    have hgap : 0 < 3 * C₀ - D := by nlinarith
+    have hfreqG : ∃ᶠ j : ℕ in atTop, C₀ < G j :=
+      Filter.frequently_lt_of_lt_limsup hGcobdd (by simpa [L] using hC₀L)
+    have hsmall :
+        ∀ᶠ j : ℕ in atTop,
+          Real.log 2 / Real.log (Q j : ℝ) < 3 * C₀ - D := by
+      simpa [Q] using
+        (log_const_over_log_continuantDen_succ_tendsto_zero
+          (a := a) hpos (Real.log 2)).eventually
+          (eventually_lt_nhds hgap)
+    have hlower :=
+      three_endpoint_safeBlock_sub_log_two_le_log_positiveVisibleEnergy
+        (a := a) hpos
+    have hfreqEcomp : ∃ᶠ j : ℕ in atTop, D ≤ (E ∘ Q) j :=
+      (hfreqG.and_eventually (hsmall.and hlower)).mono (fun j hN => by
+        rcases hN with ⟨hGj, hsmallj, hlowerj⟩
+        have hcalc :
+            D ≤ 3 * G j - Real.log 2 / Real.log (Q j : ℝ) := by
+          nlinarith
+        exact hcalc.trans (by
+          simpa [G, E, Q, Function.comp_def] using hlowerj))
+    have hD_le_comp : D ≤ limsup (E ∘ Q) atTop :=
+      Filter.le_limsup_of_frequently_le hfreqEcomp hEcomp_bdd
+    exact lt_of_lt_of_le hCD (hD_le_comp.trans hcomp_le_E)
+  have hcanon :
+      canonicalBlockExponent a = limsup G atTop := by
+    simpa [G] using canonicalBlockExponent_eq_limsup_endpoint_safeBlock_ratio
+      (a := a) hpos
+  rw [hcanon]
+  simpa [positiveVisibleAdditiveEnergyExponent, E] using hmain
+
+theorem positiveVisibleAdditiveEnergyExponent_eq_three_mul_canonicalBlockExponent
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1)) :
+    positiveVisibleAdditiveEnergyExponent a =
+      3 * canonicalBlockExponent a := by
+  apply le_antisymm
+  · calc
+      positiveVisibleAdditiveEnergyExponent a
+          ≤ visibleAdditiveEnergyExponent a :=
+            positiveVisibleAdditiveEnergyExponent_le_visibleAdditiveEnergyExponent
+      _ = 3 * canonicalBlockExponent a :=
+            visibleAdditiveEnergyExponent_eq_three_mul_canonicalBlockExponent hpos
+  · exact three_mul_canonicalBlockExponent_le_positiveVisibleAdditiveEnergyExponent
+      hpos
+
 lemma properHilbertCubeDimension_ge_of_hasProperHilbertCube
     {S : Finset ℕ} {h : ℕ}
     (hh : HasProperHilbertCube S h) :
@@ -4811,6 +6719,21 @@ lemma hasProperHilbertCube_properHilbertCubeDimension_of_pos
       _ = h := hfh
   simpa [hdim_eq] using hcube
 
+lemma properHilbertCubeDimension_mono {S T : Finset ℕ}
+    (hST : S ⊆ T) :
+    properHilbertCubeDimension S ≤ properHilbertCubeDimension T := by
+  by_cases hzero : properHilbertCubeDimension S = 0
+  · rw [hzero]
+    exact Nat.zero_le _
+  · have hpos : 0 < properHilbertCubeDimension S :=
+      Nat.pos_of_ne_zero hzero
+    have hcubeS :
+        HasProperHilbertCube S (properHilbertCubeDimension S) :=
+      hasProperHilbertCube_properHilbertCubeDimension_of_pos
+        (S := S) hpos
+    exact properHilbertCubeDimension_ge_of_hasProperHilbertCube
+      (hasProperHilbertCube_mono hST hcubeS)
+
 lemma two_pow_properHilbertCubeDimension_le_cover
     {a : ℕ → ℕ}
     (hpos : ∀ n : ℕ, 0 < a (n + 1))
@@ -4859,6 +6782,31 @@ lemma natLog_two_canonicalBlockLength_le_visibleHilbertCubeDimension
           (Nat.log 2 (canonicalBlockLength a j)) :=
       (fullCanonicalBlock_additive_lower_bridge
         (a := a) hpos (N := N) (j := j) hjN).2.2
+        (Nat.log 2 (canonicalBlockLength a j)) hpow
+    exact properHilbertCubeDimension_ge_of_hasProperHilbertCube hcube
+
+lemma natLog_two_canonicalBlockLength_le_positiveVisibleHilbertCubeDimension
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1))
+    {N j : ℕ}
+    (hjpos : 0 < j)
+    (hjN : continuantDen a (j + 1) ≤ N) :
+    Nat.log 2 (canonicalBlockLength a j)
+      ≤
+    properHilbertCubeDimension
+      (positiveVisibleCanonicalDenominatorSet a N) := by
+  by_cases hm0 : canonicalBlockLength a j = 0
+  · simp [hm0]
+  · have hpow :
+        2 ^ Nat.log 2 (canonicalBlockLength a j)
+          ≤ canonicalBlockLength a j :=
+      Nat.pow_log_le_self 2 hm0
+    have hcube :
+        HasProperHilbertCube
+          (positiveVisibleCanonicalDenominatorSet a N)
+          (Nat.log 2 (canonicalBlockLength a j)) :=
+      (fullPositiveCanonicalBlock_additive_lower_bridge
+        (a := a) hpos (N := N) (j := j) hjpos hjN).2.2
         (Nat.log 2 (canonicalBlockLength a j)) hpow
     exact properHilbertCubeDimension_ge_of_hasProperHilbertCube hcube
 
@@ -4968,6 +6916,30 @@ lemma visibleHilbertCube_ratio_nonneg_eventually
   exact div_nonneg (by positivity)
     (Real.log_nonneg (by exact_mod_cast hN))
 
+lemma positiveVisibleHilbertCube_ratio_nonneg_eventually
+    (a : ℕ → ℕ) :
+    ∀ᶠ N : ℕ in atTop,
+      0 ≤
+        (properHilbertCubeDimension
+            (positiveVisibleCanonicalDenominatorSet a N) : ℝ) /
+          Real.log (N : ℝ) := by
+  refine (eventually_ge_atTop 1).mono ?_
+  intro N hN
+  exact div_nonneg (by positivity)
+    (Real.log_nonneg (by exact_mod_cast hN))
+
+lemma floorSumAHilbertCube_ratio_nonneg_eventually
+    (r : ℝ) :
+    ∀ᶠ N : ℕ in atTop,
+      0 ≤
+        (properHilbertCubeDimension
+            (visibleFloorSumASet r N) : ℝ) /
+          Real.log (N : ℝ) := by
+  refine (eventually_ge_atTop 1).mono ?_
+  intro N hN
+  exact div_nonneg (by positivity)
+    (Real.log_nonneg (by exact_mod_cast hN))
+
 lemma visibleHilbertCube_ratio_le_two_div_log_two_eventually
     {a : ℕ → ℕ}
     (hpos : ∀ n : ℕ, 0 < a (n + 1)) :
@@ -4998,6 +6970,77 @@ lemma visibleHilbertCube_ratio_le_two_div_log_two_eventually
     gcongr
     linarith
   exact hfinite.trans hsum
+
+lemma positiveVisibleHilbertCube_ratio_le_two_div_log_two_eventually
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1)) :
+    ∀ᶠ N : ℕ in atTop,
+      (properHilbertCubeDimension
+          (positiveVisibleCanonicalDenominatorSet a N) : ℝ) /
+        Real.log (N : ℝ)
+      ≤ 2 / Real.log 2 := by
+  filter_upwards
+    [eventually_ge_atTop 1,
+      visibleHilbertCube_ratio_le_two_div_log_two_eventually
+        (a := a) hpos]
+    with N hN hraw
+  have hdim :
+      properHilbertCubeDimension (positiveVisibleCanonicalDenominatorSet a N) ≤
+        properHilbertCubeDimension (visibleCanonicalDenominatorSet a N) :=
+    properHilbertCubeDimension_mono
+      (by
+        unfold positiveVisibleCanonicalDenominatorSet
+        exact Finset.erase_subset _ _)
+  have hden_nonneg : 0 ≤ Real.log (N : ℝ) :=
+    Real.log_nonneg (by exact_mod_cast hN)
+  exact (div_le_div_of_nonneg_right (by exact_mod_cast hdim) hden_nonneg).trans
+    hraw
+
+theorem positiveVisibleHilbertCubeExponent_le_visibleHilbertCubeExponent
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1)) :
+    positiveVisibleHilbertCubeExponent a ≤
+      visibleHilbertCubeExponent a := by
+  let P : ℕ → ℝ := fun N =>
+    (properHilbertCubeDimension
+        (positiveVisibleCanonicalDenominatorSet a N) : ℝ) /
+      Real.log (N : ℝ)
+  let V : ℕ → ℝ := fun N =>
+    (properHilbertCubeDimension
+        (visibleCanonicalDenominatorSet a N) : ℝ) /
+      Real.log (N : ℝ)
+  have hPV : P ≤ᶠ[atTop] V := by
+    refine (eventually_ge_atTop 1).mono ?_
+    intro N hN
+    have hdim :
+        properHilbertCubeDimension
+            (positiveVisibleCanonicalDenominatorSet a N) ≤
+          properHilbertCubeDimension
+            (visibleCanonicalDenominatorSet a N) :=
+      properHilbertCubeDimension_mono
+        (by
+          unfold positiveVisibleCanonicalDenominatorSet
+          exact Finset.erase_subset _ _)
+    have hden_nonneg : 0 ≤ Real.log (N : ℝ) :=
+      Real.log_nonneg (by exact_mod_cast hN)
+    exact div_le_div_of_nonneg_right (by exact_mod_cast hdim) hden_nonneg
+  have hPcobdd :
+      Filter.IsCoboundedUnder (fun x y : ℝ => x ≤ y) atTop P :=
+    Filter.IsCoboundedUnder.of_frequently_ge
+      ((positiveVisibleHilbertCube_ratio_nonneg_eventually a).frequently.mono
+        (fun N hN => by simpa [P] using hN))
+  have hVbdd :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop V :=
+    Filter.isBoundedUnder_of_eventually_le
+      (by
+        filter_upwards
+          [visibleHilbertCube_ratio_le_two_div_log_two_eventually
+            (a := a) hpos]
+          with N hN
+        simpa [V] using hN)
+  have hlim := Filter.limsup_le_limsup hPV hPcobdd hVbdd
+  simpa [positiveVisibleHilbertCubeExponent,
+    visibleHilbertCubeExponent, P, V] using hlim
 
 lemma visibleHilbertCubeExponent_le_canonicalBlockExponent_div_log_two
     {a : ℕ → ℕ}
@@ -5269,6 +7312,468 @@ theorem visibleHilbertCubeExponent_eq_canonicalBlockExponent_div_log_two
   exact le_antisymm
     (visibleHilbertCubeExponent_le_canonicalBlockExponent_div_log_two hpos)
     (canonicalBlockExponent_div_log_two_le_visibleHilbertCubeExponent hpos)
+
+lemma endpoint_safeBlock_div_log_two_sub_inv_log_le_positiveHilbertDimension
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1)) :
+    ∀ᶠ j : ℕ in atTop,
+      (Real.log (canonicalSafeBlockLength a j : ℝ) /
+          Real.log (continuantDen a (j + 1) : ℝ)) / Real.log 2 -
+        1 / Real.log (continuantDen a (j + 1) : ℝ)
+      ≤
+      (properHilbertCubeDimension
+          (positiveVisibleCanonicalDenominatorSet a
+            (continuantDen a (j + 1))) : ℝ) /
+        Real.log (continuantDen a (j + 1) : ℝ) := by
+  have hQ :
+      Tendsto (fun j : ℕ => continuantDen a (j + 1)) atTop atTop := by
+    exact (Filter.tendsto_add_atTop_iff_nat
+      (f := continuantDen a) 1).2
+      (continuantDen_tendsto_atTop_of_partials_pos hpos)
+  filter_upwards [eventually_ge_atTop 1, hQ.eventually_gt_atTop 1]
+    with j hj1 hQgt1
+  let N : ℕ := continuantDen a (j + 1)
+  let R : ℕ := canonicalSafeBlockLength a j
+  let H : ℕ := properHilbertCubeDimension
+    (positiveVisibleCanonicalDenominatorSet a N)
+  have hlog2pos : 0 < Real.log 2 := Real.log_pos (by norm_num)
+  have hlogNpos : 0 < Real.log (N : ℝ) :=
+    Real.log_pos (by exact_mod_cast hQgt1)
+  have hHratio_nonneg : 0 ≤ (H : ℝ) / Real.log (N : ℝ) :=
+    div_nonneg (by positivity) hlogNpos.le
+  by_cases hRone : R = 1
+  · have hlogR : Real.log (R : ℝ) = 0 := by
+      rw [hRone]
+      norm_num
+    have hleft_nonpos :
+        (Real.log (R : ℝ) / Real.log (N : ℝ)) / Real.log 2 -
+          1 / Real.log (N : ℝ) ≤ 0 := by
+      have hinv_nonneg : 0 ≤ 1 / Real.log (N : ℝ) := by positivity
+      rw [hlogR]
+      simp only [zero_div, sub_nonpos]
+      exact hinv_nonneg
+    exact hleft_nonpos.trans hHratio_nonneg
+  · have hRgt1 : 1 < R := by
+      have hRge : 1 ≤ R := by
+        dsimp [R]
+        exact one_le_canonicalSafeBlockLength a j
+      omega
+    have hRleLen :
+        R ≤ canonicalBlockLength a j := by
+      have hmax :
+          1 < max 1 (canonicalBlockLength a j) := by
+        simpa [R, canonicalSafeBlockLength] using hRgt1
+      have hLgt1 : 1 < canonicalBlockLength a j := by
+        rcases lt_max_iff.mp hmax with hbad | hgood
+        · omega
+        · exact hgood
+      dsimp [R]
+      unfold canonicalSafeBlockLength
+      exact max_le (le_of_lt hLgt1) (le_refl _)
+    have hlen_ge : 1 ≤ canonicalBlockLength a j := by
+      exact (le_of_lt hRgt1).trans hRleLen
+    have hnatLog_le_H :
+        Nat.log 2 (canonicalBlockLength a j) ≤ H := by
+      dsimp [H, N]
+      exact natLog_two_canonicalBlockLength_le_positiveVisibleHilbertCubeDimension
+        (a := a) hpos (N := continuantDen a (j + 1)) (j := j)
+        (lt_of_lt_of_le Nat.zero_lt_one hj1) le_rfl
+    have hRpos : 0 < (R : ℝ) := by
+      exact_mod_cast (lt_trans Nat.zero_lt_one hRgt1)
+    have hlogR_le_len :
+        Real.log (R : ℝ) ≤
+          Real.log (canonicalBlockLength a j : ℝ) :=
+      Real.log_le_log hRpos (by exact_mod_cast hRleLen)
+    have hlog_len_le :
+        Real.log (canonicalBlockLength a j : ℝ) ≤
+          ((Nat.log 2 (canonicalBlockLength a j) + 1 : ℕ) : ℝ) *
+            Real.log 2 :=
+      real_log_le_succ_natLog_mul_log_two hlen_ge
+    have hnat_succ_le :
+        ((Nat.log 2 (canonicalBlockLength a j) + 1 : ℕ) : ℝ)
+          ≤ (H : ℝ) + 1 := by
+      exact_mod_cast Nat.succ_le_succ hnatLog_le_H
+    have hlogR_le_H :
+        Real.log (R : ℝ) ≤ ((H : ℝ) + 1) * Real.log 2 := by
+      calc
+        Real.log (R : ℝ) ≤
+            Real.log (canonicalBlockLength a j : ℝ) := hlogR_le_len
+        _ ≤ ((Nat.log 2 (canonicalBlockLength a j) + 1 : ℕ) : ℝ) *
+            Real.log 2 := hlog_len_le
+        _ ≤ ((H : ℝ) + 1) * Real.log 2 :=
+          mul_le_mul_of_nonneg_right hnat_succ_le hlog2pos.le
+    have hdiv_log2 :
+        Real.log (R : ℝ) / Real.log 2 ≤ (H : ℝ) + 1 := by
+      exact (div_le_iff₀ hlog2pos).2 hlogR_le_H
+    have hdivN :
+        (Real.log (R : ℝ) / Real.log 2) /
+            Real.log (N : ℝ) ≤
+          ((H : ℝ) + 1) / Real.log (N : ℝ) :=
+      div_le_div_of_nonneg_right hdiv_log2 hlogNpos.le
+    have hswap :
+        (Real.log (R : ℝ) / Real.log (N : ℝ)) / Real.log 2 =
+          (Real.log (R : ℝ) / Real.log 2) /
+            Real.log (N : ℝ) := by
+      field_simp [hlog2pos.ne', hlogNpos.ne']
+    rw [hswap]
+    have hgoal :
+        (Real.log (R : ℝ) / Real.log 2) / Real.log (N : ℝ) -
+            1 / Real.log (N : ℝ) ≤
+          (H : ℝ) / Real.log (N : ℝ) := by
+      calc
+        (Real.log (R : ℝ) / Real.log 2) / Real.log (N : ℝ) -
+            1 / Real.log (N : ℝ)
+            ≤ ((H : ℝ) + 1) / Real.log (N : ℝ) -
+                1 / Real.log (N : ℝ) :=
+          sub_le_sub_right hdivN _
+        _ = (H : ℝ) / Real.log (N : ℝ) := by ring
+    simpa [N, R, H] using hgoal
+
+theorem canonicalBlockExponent_div_log_two_le_positiveVisibleHilbertCubeExponent
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1)) :
+    canonicalBlockExponent a / Real.log 2 ≤
+      positiveVisibleHilbertCubeExponent a := by
+  let G : ℕ → ℝ := fun j =>
+    Real.log (canonicalSafeBlockLength a j : ℝ) /
+      Real.log (continuantDen a (j + 1) : ℝ)
+  let H : ℕ → ℝ := fun N =>
+    (properHilbertCubeDimension
+        (positiveVisibleCanonicalDenominatorSet a N) : ℝ) /
+      Real.log (N : ℝ)
+  let Q : ℕ → ℕ := fun j => continuantDen a (j + 1)
+  have hQ : Tendsto Q atTop atTop := by
+    exact (Filter.tendsto_add_atTop_iff_nat
+      (f := continuantDen a) 1).2
+      (continuantDen_tendsto_atTop_of_partials_pos hpos)
+  have hGcobdd :
+      Filter.IsCoboundedUnder (fun x y : ℝ => x ≤ y) atTop G :=
+    Filter.IsCoboundedUnder.of_frequently_ge
+      ((endpoint_safeBlock_ratio_nonneg_eventually hpos).frequently.mono
+        (fun j hj => by simpa [G] using hj))
+  have hHcomp_bdd :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop (H ∘ Q) :=
+    Filter.isBoundedUnder_of_eventually_le
+      (by
+        filter_upwards [hQ.eventually
+          (positiveVisibleHilbertCube_ratio_le_two_div_log_two_eventually
+            (a := a) hpos)]
+          with j hj
+        simpa [H, Q, Function.comp_def] using hj)
+  have hHbdd :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop H :=
+    Filter.isBoundedUnder_of_eventually_le
+      (by
+        filter_upwards
+          [positiveVisibleHilbertCube_ratio_le_two_div_log_two_eventually
+            (a := a) hpos]
+          with N hN
+        simpa [H] using hN)
+  have hHnonneg_map :
+      ∀ᶠ N : ℕ in Filter.map Q atTop, 0 ≤ H N := by
+    exact hQ
+      (by
+        filter_upwards [positiveVisibleHilbertCube_ratio_nonneg_eventually a]
+          with N hN
+        simpa [H] using hN)
+  have hHmap_cobdd :
+      Filter.IsCoboundedUnder (fun x y : ℝ => x ≤ y)
+        (Filter.map Q atTop) H :=
+    Filter.IsCoboundedUnder.of_frequently_ge hHnonneg_map.frequently
+  have hcomp_le_H : limsup (H ∘ Q) atTop ≤ limsup H atTop :=
+    Filter.Tendsto.limsup_comp_le_limsup hQ hHmap_cobdd hHbdd
+  have hmain : limsup G atTop / Real.log 2 ≤ limsup H atTop := by
+    refine le_of_forall_lt ?_
+    intro C hC
+    let L : ℝ := limsup G atTop
+    have hlog2pos : 0 < Real.log 2 := Real.log_pos (by norm_num)
+    have hC' : C < L / Real.log 2 := by
+      simpa [L] using hC
+    have hCLog_lt_L : C * Real.log 2 < L := by
+      have hmul := mul_lt_mul_of_pos_right hC' hlog2pos
+      field_simp [hlog2pos.ne'] at hmul
+      simpa [L, mul_comm] using hmul
+    let C₀ : ℝ := (C * Real.log 2 + L) / 2
+    have hCLog_C₀ : C * Real.log 2 < C₀ := by
+      dsimp [C₀]
+      nlinarith
+    have hC₀L : C₀ < L := by
+      dsimp [C₀]
+      nlinarith
+    have hC_lt_C₀div : C < C₀ / Real.log 2 := by
+      rw [lt_div_iff₀ hlog2pos]
+      exact hCLog_C₀
+    let D : ℝ := (C + C₀ / Real.log 2) / 2
+    have hCD : C < D := by
+      dsimp [D]
+      nlinarith
+    have hDlt : D < C₀ / Real.log 2 := by
+      dsimp [D]
+      nlinarith
+    have hgap : 0 < C₀ / Real.log 2 - D := by
+      nlinarith
+    have hfreqG : ∃ᶠ j : ℕ in atTop, C₀ < G j :=
+      Filter.frequently_lt_of_lt_limsup hGcobdd
+        (by simpa [L] using hC₀L)
+    have hsmall :
+        ∀ᶠ j : ℕ in atTop,
+          1 / Real.log (Q j : ℝ) < C₀ / Real.log 2 - D := by
+      simpa [Q] using
+        (log_const_over_log_continuantDen_succ_tendsto_zero
+          (a := a) hpos 1).eventually
+          (eventually_lt_nhds hgap)
+    have hlower :=
+      endpoint_safeBlock_div_log_two_sub_inv_log_le_positiveHilbertDimension
+        (a := a) hpos
+    have hfreqHcomp : ∃ᶠ j : ℕ in atTop, D ≤ (H ∘ Q) j :=
+      (hfreqG.and_eventually (hsmall.and hlower)).mono (fun j hN => by
+        rcases hN with ⟨hGj, hsmallj, hlowerj⟩
+        have hGjdiv : C₀ / Real.log 2 < G j / Real.log 2 :=
+          div_lt_div_of_pos_right hGj hlog2pos
+        have hcalc :
+            D ≤ G j / Real.log 2 - 1 / Real.log (Q j : ℝ) := by
+          nlinarith
+        exact hcalc.trans (by
+          simpa [G, H, Q, Function.comp_def] using hlowerj))
+    have hD_le_comp : D ≤ limsup (H ∘ Q) atTop :=
+      Filter.le_limsup_of_frequently_le hfreqHcomp hHcomp_bdd
+    exact lt_of_lt_of_le hCD (hD_le_comp.trans hcomp_le_H)
+  have hcanon :
+      canonicalBlockExponent a = limsup G atTop := by
+    simpa [G] using canonicalBlockExponent_eq_limsup_endpoint_safeBlock_ratio
+      (a := a) hpos
+  rw [hcanon]
+  simpa [positiveVisibleHilbertCubeExponent, H] using hmain
+
+theorem positiveVisibleHilbertCubeExponent_eq_canonicalBlockExponent_div_log_two
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1)) :
+    positiveVisibleHilbertCubeExponent a =
+      canonicalBlockExponent a / Real.log 2 := by
+  apply le_antisymm
+  · calc
+      positiveVisibleHilbertCubeExponent a
+          ≤ visibleHilbertCubeExponent a :=
+            positiveVisibleHilbertCubeExponent_le_visibleHilbertCubeExponent
+              hpos
+      _ = canonicalBlockExponent a / Real.log 2 :=
+            visibleHilbertCubeExponent_eq_canonicalBlockExponent_div_log_two
+              hpos
+  · exact canonicalBlockExponent_div_log_two_le_positiveVisibleHilbertCubeExponent
+      hpos
+
+lemma floorSumAPopularDifferenceExponent_nonneg
+    (r : ℝ) :
+    0 ≤ floorSumAPopularDifferenceExponent r := by
+  let P : ℕ → ℝ := fun N =>
+    Real.log
+        (popularDifferenceUpTo (visibleFloorSumASet r N) N : ℝ) /
+      Real.log (N : ℝ)
+  have hPbdd :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop P :=
+    Filter.isBoundedUnder_of_eventually_le
+      (by
+        filter_upwards [floorSumAPopularDifference_ratio_le_two_eventually r]
+          with N hN
+        simpa [P] using hN)
+  exact
+    (Filter.le_limsup_of_frequently_le
+      ((floorSumAPopularDifference_ratio_nonneg_eventually r).frequently.mono
+        (fun N hN => by simpa [P] using hN))
+      hPbdd)
+
+lemma floorSumAAdditiveEnergyExponent_nonneg
+    (r : ℝ) :
+    0 ≤ floorSumAAdditiveEnergyExponent r := by
+  let E : ℕ → ℝ := fun N =>
+    Real.log
+        (additiveEnergy (visibleFloorSumASet r N) : ℝ) /
+      Real.log (N : ℝ)
+  have hEbdd :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop E :=
+    Filter.isBoundedUnder_of_eventually_le
+      (by
+        filter_upwards [floorSumAAdditiveEnergy_ratio_le_three_eventually r]
+          with N hN
+        simpa [E] using hN)
+  exact
+    (Filter.le_limsup_of_frequently_le
+      ((floorSumAAdditiveEnergy_ratio_nonneg_eventually r).frequently.mono
+        (fun N hN => by simpa [E] using hN))
+      hEbdd)
+
+lemma floorSumAPopularDifferenceExponent_le_visiblePopularDifferenceExponent
+    {r : ℝ} {a : ℕ → ℕ}
+    (hsub : ∀ N : ℕ,
+      visibleFloorSumASet r N ⊆ visibleCanonicalDenominatorSet a N) :
+    floorSumAPopularDifferenceExponent r
+      ≤ visiblePopularDifferenceExponent a := by
+  let F : ℕ → ℝ := fun N =>
+    Real.log
+        (popularDifferenceUpTo (visibleFloorSumASet r N) N : ℝ) /
+      Real.log (N : ℝ)
+  let G : ℕ → ℝ := fun N =>
+    Real.log
+        (popularDifferenceUpTo (visibleCanonicalDenominatorSet a N) N : ℝ) /
+      Real.log (N : ℝ)
+  have hFG : F ≤ᶠ[atTop] G := by
+    refine (eventually_ge_atTop 2).mono ?_
+    intro N hN
+    let PF : ℕ := popularDifferenceUpTo (visibleFloorSumASet r N) N
+    let PG : ℕ := popularDifferenceUpTo (visibleCanonicalDenominatorSet a N) N
+    have hPFpos : 0 < (PF : ℝ) := by
+      dsimp [PF]
+      exact_mod_cast
+        (lt_of_lt_of_le Nat.zero_lt_one
+          (one_le_popularDifferenceUpTo (visibleFloorSumASet r N) N))
+    have hPFPG : PF ≤ PG := by
+      dsimp [PF, PG]
+      exact popularDifferenceUpTo_mono (hsub N) N
+    have hlog_le : Real.log (PF : ℝ) ≤ Real.log (PG : ℝ) :=
+      Real.log_le_log hPFpos (by exact_mod_cast hPFPG)
+    have hlogNpos : 0 < Real.log (N : ℝ) :=
+      Real.log_pos (by exact_mod_cast hN)
+    exact div_le_div_of_nonneg_right hlog_le hlogNpos.le
+  have hFcobdd :
+      Filter.IsCoboundedUnder (fun x y : ℝ => x ≤ y) atTop F :=
+    Filter.IsCoboundedUnder.of_frequently_ge
+      ((floorSumAPopularDifference_ratio_nonneg_eventually r).frequently.mono
+        (fun N hN => by simpa [F] using hN))
+  have hGbdd :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop G :=
+    Filter.isBoundedUnder_of_eventually_le
+      (by
+        filter_upwards [visiblePopularDifference_ratio_le_two_eventually a]
+          with N hN
+        simpa [G] using hN)
+  have hlim := Filter.limsup_le_limsup hFG hFcobdd hGbdd
+  simpa [floorSumAPopularDifferenceExponent,
+    visiblePopularDifferenceExponent, F, G] using hlim
+
+lemma floorSumAAdditiveEnergyExponent_le_visibleAdditiveEnergyExponent
+    {r : ℝ} {a : ℕ → ℕ}
+    (hsub : ∀ N : ℕ,
+      visibleFloorSumASet r N ⊆ visibleCanonicalDenominatorSet a N) :
+    floorSumAAdditiveEnergyExponent r
+      ≤ visibleAdditiveEnergyExponent a := by
+  let F : ℕ → ℝ := fun N =>
+    Real.log
+        (additiveEnergy (visibleFloorSumASet r N) : ℝ) /
+      Real.log (N : ℝ)
+  let G : ℕ → ℝ := fun N =>
+    Real.log
+        (additiveEnergy (visibleCanonicalDenominatorSet a N) : ℝ) /
+      Real.log (N : ℝ)
+  have hFG : F ≤ᶠ[atTop] G := by
+    filter_upwards [eventually_ge_atTop 2,
+      visibleAdditiveEnergy_ratio_nonneg_eventually a] with N hN hGnonneg
+    let EF : ℕ := additiveEnergy (visibleFloorSumASet r N)
+    let EG : ℕ := additiveEnergy (visibleCanonicalDenominatorSet a N)
+    have hEFEG : EF ≤ EG := by
+      dsimp [EF, EG]
+      exact additiveEnergy_mono (hsub N)
+    by_cases hEF0 : EF = 0
+    · simpa [F, G, EF, EG, hEF0] using hGnonneg
+    · have hEFpos : 0 < (EF : ℝ) := by
+        exact_mod_cast Nat.pos_of_ne_zero hEF0
+      have hlog_le : Real.log (EF : ℝ) ≤ Real.log (EG : ℝ) :=
+        Real.log_le_log hEFpos (by exact_mod_cast hEFEG)
+      have hlogNpos : 0 < Real.log (N : ℝ) :=
+        Real.log_pos (by exact_mod_cast hN)
+      simpa [F, G, EF, EG] using
+        div_le_div_of_nonneg_right hlog_le hlogNpos.le
+  have hFcobdd :
+      Filter.IsCoboundedUnder (fun x y : ℝ => x ≤ y) atTop F :=
+    Filter.IsCoboundedUnder.of_frequently_ge
+      ((floorSumAAdditiveEnergy_ratio_nonneg_eventually r).frequently.mono
+        (fun N hN => by simpa [F] using hN))
+  have hGbdd :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop G :=
+    Filter.isBoundedUnder_of_eventually_le
+      (by
+        filter_upwards [visibleAdditiveEnergy_ratio_le_three_eventually a]
+          with N hN
+        simpa [G] using hN)
+  have hlim := Filter.limsup_le_limsup hFG hFcobdd hGbdd
+  simpa [floorSumAAdditiveEnergyExponent,
+    visibleAdditiveEnergyExponent, F, G] using hlim
+
+lemma floorSumAHilbertCubeExponent_le_visibleHilbertCubeExponent
+    {r : ℝ} {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1))
+    (hsub : ∀ N : ℕ,
+      visibleFloorSumASet r N ⊆ visibleCanonicalDenominatorSet a N) :
+    floorSumAHilbertCubeExponent r
+      ≤ visibleHilbertCubeExponent a := by
+  let F : ℕ → ℝ := fun N =>
+    (properHilbertCubeDimension (visibleFloorSumASet r N) : ℝ) /
+      Real.log (N : ℝ)
+  let G : ℕ → ℝ := fun N =>
+    (properHilbertCubeDimension (visibleCanonicalDenominatorSet a N) : ℝ) /
+      Real.log (N : ℝ)
+  have hFG : F ≤ᶠ[atTop] G := by
+    refine (eventually_ge_atTop 1).mono ?_
+    intro N hN
+    have hdim :
+        properHilbertCubeDimension (visibleFloorSumASet r N) ≤
+          properHilbertCubeDimension (visibleCanonicalDenominatorSet a N) :=
+      properHilbertCubeDimension_mono (hsub N)
+    have hden_nonneg : 0 ≤ Real.log (N : ℝ) :=
+      Real.log_nonneg (by exact_mod_cast hN)
+    exact div_le_div_of_nonneg_right (by exact_mod_cast hdim) hden_nonneg
+  have hFcobdd :
+      Filter.IsCoboundedUnder (fun x y : ℝ => x ≤ y) atTop F :=
+    Filter.IsCoboundedUnder.of_frequently_ge
+      ((floorSumAHilbertCube_ratio_nonneg_eventually r).frequently.mono
+        (fun N hN => by simpa [F] using hN))
+  have hGbdd :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop G :=
+    Filter.isBoundedUnder_of_eventually_le
+      (by
+        filter_upwards
+          [visibleHilbertCube_ratio_le_two_div_log_two_eventually
+            (a := a) hpos]
+          with N hN
+        simpa [G] using hN)
+  have hlim := Filter.limsup_le_limsup hFG hFcobdd hGbdd
+  simpa [floorSumAHilbertCubeExponent,
+    visibleHilbertCubeExponent, F, G] using hlim
+
+lemma floorSumAHilbertCubeExponent_nonneg_of_subset
+    {r : ℝ} {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1))
+    (hsub : ∀ N : ℕ,
+      visibleFloorSumASet r N ⊆ visibleCanonicalDenominatorSet a N) :
+    0 ≤ floorSumAHilbertCubeExponent r := by
+  let F : ℕ → ℝ := fun N =>
+    (properHilbertCubeDimension (visibleFloorSumASet r N) : ℝ) /
+      Real.log (N : ℝ)
+  let G : ℕ → ℝ := fun N =>
+    (properHilbertCubeDimension (visibleCanonicalDenominatorSet a N) : ℝ) /
+      Real.log (N : ℝ)
+  have hFG : F ≤ᶠ[atTop] G := by
+    refine (eventually_ge_atTop 1).mono ?_
+    intro N hN
+    have hdim :
+        properHilbertCubeDimension (visibleFloorSumASet r N) ≤
+          properHilbertCubeDimension (visibleCanonicalDenominatorSet a N) :=
+      properHilbertCubeDimension_mono (hsub N)
+    have hden_nonneg : 0 ≤ Real.log (N : ℝ) :=
+      Real.log_nonneg (by exact_mod_cast hN)
+    exact div_le_div_of_nonneg_right (by exact_mod_cast hdim) hden_nonneg
+  have hFbdd :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop F :=
+    Filter.isBoundedUnder_of_eventually_le
+      (by
+        filter_upwards [hFG,
+          visibleHilbertCube_ratio_le_two_div_log_two_eventually
+            (a := a) hpos] with N hle hG
+        exact hle.trans (by simpa [G] using hG))
+  exact
+    (Filter.le_limsup_of_frequently_le
+      ((floorSumAHilbertCube_ratio_nonneg_eventually r).frequently.mono
+        (fun N hN => by simpa [F] using hN))
+      hFbdd)
 
 /-- For Euler-pattern coefficients, the canonical block growth is
 sub-polynomial: `log R(N) / log N → 0`. -/

@@ -141,6 +141,25 @@ lemma popularDifferenceCount_le_card (S : Finset ℕ) (d : ℕ) :
   unfold popularDifferenceCount
   exact Finset.card_filter_le _ _
 
+lemma popularDifferenceCount_mono {S T : Finset ℕ}
+    (hST : S ⊆ T) (d : ℕ) :
+    popularDifferenceCount S d ≤ popularDifferenceCount T d := by
+  unfold popularDifferenceCount
+  exact Finset.card_le_card (by
+    intro x hx
+    rw [Finset.mem_filter] at hx ⊢
+    exact ⟨hST hx.1, hST hx.2⟩)
+
+lemma popularDifferenceUpTo_mono {S T : Finset ℕ}
+    (hST : S ⊆ T) (N : ℕ) :
+    popularDifferenceUpTo S N ≤ popularDifferenceUpTo T N := by
+  unfold popularDifferenceUpTo
+  simpa [Nat.succ_eq_add_one, add_comm] using
+    Nat.succ_le_succ (Finset.sup_le (fun d hd =>
+      (popularDifferenceCount_mono hST d).trans
+        (Finset.le_sup (s := Finset.Icc 1 N)
+          (f := popularDifferenceCount T) hd)))
+
 lemma popularDifferenceUpTo_le_card_add_one (S : Finset ℕ) (N : ℕ) :
     popularDifferenceUpTo S N ≤ 1 + S.card := by
   unfold popularDifferenceUpTo
@@ -195,6 +214,13 @@ lemma additiveEnergy_mono {S T : Finset ℕ}
     (hST : S ⊆ T) :
     additiveEnergy S ≤ additiveEnergy T := by
   exact Finset.addEnergy_mono hST hST
+
+lemma hasProperHilbertCube_mono {S T : Finset ℕ}
+    (hST : S ⊆ T) {h : ℕ}
+    (hcube : HasProperHilbertCube S h) :
+    HasProperHilbertCube T h := by
+  rcases hcube with ⟨x₀, steps, hinj, hmem⟩
+  exact ⟨x₀, steps, hinj, fun ε => hST (hmem ε)⟩
 
 lemma two_pow_le_card_of_hasProperHilbertCube
     {S : Finset ℕ} {h : ℕ}
@@ -554,5 +580,60 @@ theorem finite_block_bridge_popular_energy
       _ = K * V := by simp
   refine ⟨hpop.1, hpop.2, ?_⟩
   exact (additiveEnergy_le_card_cube S).trans (Nat.pow_le_pow_left hcard_le 3)
+
+/-- The finite block bridge in the `K,V` form used in the writeup.
+
+If `S` is covered by `K` arithmetic blocks of length at most `V`, and one
+length-`V` block is contained in `S` with step in `[1,N]`, then popular
+differences, additive energy, and Hilbert-cube dimensions are sandwiched by
+the corresponding `V` and `K * V` scales. -/
+theorem finite_block_bridge
+    {S : Finset ℕ} {N K V : ℕ}
+    {starts steps lengths : Fin K → ℕ}
+    (hcover :
+      S ⊆ (Finset.univ : Finset (Fin K)).biUnion
+        (fun i => finiteArithmeticBlock (starts i) (steps i) (lengths i)))
+    (hlen : ∀ i : Fin K, lengths i ≤ V)
+    (hexists :
+      ∃ i : Fin K,
+        lengths i = V ∧
+          1 ≤ steps i ∧ steps i ≤ N ∧
+          finiteArithmeticBlock (starts i) (steps i) (lengths i) ⊆ S) :
+    V ≤ popularDifferenceUpTo S N ∧
+      popularDifferenceUpTo S N ≤ 1 + K * V ∧
+      V ^ 3 ≤ 2 * additiveEnergy S ∧
+      additiveEnergy S ≤ (K * V) ^ 3 ∧
+      (∀ h : ℕ, 2 ^ h ≤ V → HasProperHilbertCube S h) ∧
+      (∀ h : ℕ, HasProperHilbertCube S h → 2 ^ h ≤ K * V) := by
+  rcases hexists with ⟨i, hiV, hstep1, hstepN, hblock⟩
+  have hBcard :
+      ∀ j ∈ (Finset.univ : Finset (Fin K)),
+        (finiteArithmeticBlock (starts j) (steps j) (lengths j)).card ≤ V := by
+    intro j _hj
+    calc
+      (finiteArithmeticBlock (starts j) (steps j) (lengths j)).card
+          ≤ lengths j := by
+            unfold finiteArithmeticBlock
+            simpa using
+              (Finset.card_image_le
+                (s := Finset.range (lengths j))
+                (f := fun r : ℕ => starts j + r * steps j))
+      _ ≤ V := hlen j
+  have hbridge :=
+    finite_block_cover_bridge
+      (I := (Finset.univ : Finset (Fin K)))
+      (B := fun j => finiteArithmeticBlock (starts j) (steps j) (lengths j))
+      (S := S) (N := N) (s := starts i) (d := steps i)
+      (m := lengths i) (M := V)
+      ⟨hstep1, hstepN⟩ hblock hcover hBcard
+  rcases hbridge with
+    ⟨hpop_low, hpop_high, henergy_low, henergy_high,
+      hcube_low, hcube_high⟩
+  subst hiV
+  refine ⟨hpop_low, ?_, henergy_low, ?_, hcube_low, ?_⟩
+  · simpa [Nat.add_comm, Nat.mul_comm] using hpop_high
+  · simpa using henergy_high
+  · intro h hcube
+    simpa using hcube_high h hcube
 
 end IrrationalityAr

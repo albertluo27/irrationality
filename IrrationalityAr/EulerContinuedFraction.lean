@@ -1631,4 +1631,146 @@ theorem A_exp_one_eq_eulerExplicitASet_unconditional :
     A (Real.exp 1) = eulerExplicitASet :=
   A_exp_one_eq_eulerExplicitASet exp_one_irrational
 
+/-- The coefficient-side visible canonical truncation for Euler's continued
+fraction agrees with the true floor-sum truncation of `A_e`, up to erasing the
+possible initial shifted denominator `0`. -/
+theorem visibleCanonicalDenominatorSet_eulerCoeff_erase_zero_eq_A_exp_one_trunc
+    (N : ℕ) :
+    (visibleCanonicalDenominatorSet eulerCoeff N).erase 0 =
+      visibleFloorSumASet (Real.exp 1) N :=
+  visibleCanonicalDenominatorSet_erase_zero_eq_visibleFloorSumASet
+    (Real.exp_pos 1)
+    exp_one_irrational
+    exp_one_isSimpleCFExpansion_eulerCoeff
+    N
+
+theorem positiveVisibleCanonicalDenominatorSet_eulerCoeff_eq_A_exp_one_trunc
+    (N : ℕ) :
+    positiveVisibleCanonicalDenominatorSet eulerCoeff N =
+      visibleFloorSumASet (Real.exp 1) N := by
+  simpa [positiveVisibleCanonicalDenominatorSet] using
+    visibleCanonicalDenominatorSet_eulerCoeff_erase_zero_eq_A_exp_one_trunc N
+
+theorem positiveVisibleCanonicalDenominatorSet_eulerCoeff_eq_A_exp_one_trunc_filter
+    (N : ℕ) :
+    positiveVisibleCanonicalDenominatorSet eulerCoeff N =
+      (by
+        classical
+        exact (Finset.range N).filter (fun n => n ∈ A (Real.exp 1))) := by
+  classical
+  rw [positiveVisibleCanonicalDenominatorSet_eulerCoeff_eq_A_exp_one_trunc]
+  rfl
+
+theorem positiveVisiblePopularDifferenceExponent_eulerCoeff_eq_zero :
+    positiveVisiblePopularDifferenceExponent eulerCoeff = 0 := by
+  rw [positiveVisiblePopularDifferenceExponent_eq_canonicalBlockExponent
+    eulerCoeff_pos_succ]
+  exact eulerCoeff_canonicalBlockExponent_eq_zero
+
+theorem positiveVisibleAdditiveEnergyExponent_eulerCoeff_eq_zero :
+    positiveVisibleAdditiveEnergyExponent eulerCoeff = 0 := by
+  rw [positiveVisibleAdditiveEnergyExponent_eq_three_mul_canonicalBlockExponent
+    eulerCoeff_pos_succ]
+  rw [eulerCoeff_canonicalBlockExponent_eq_zero]
+  norm_num
+
+theorem positiveVisibleHilbertCubeExponent_eulerCoeff_eq_zero :
+    positiveVisibleHilbertCubeExponent eulerCoeff = 0 := by
+  rw [positiveVisibleHilbertCubeExponent_eq_canonicalBlockExponent_div_log_two
+    eulerCoeff_pos_succ]
+  rw [eulerCoeff_canonicalBlockExponent_eq_zero]
+  norm_num
+
+theorem positiveVisiblePopularDifferenceExponent_eulerCoeff_eq_floorSumA_exp_one :
+    positiveVisiblePopularDifferenceExponent eulerCoeff =
+      floorSumAPopularDifferenceExponent (Real.exp 1) := by
+  simpa [positiveVisiblePopularDifferenceExponent,
+    floorSumAPopularDifferenceExponent, popularDifferenceExponentOf] using
+    (popularDifferenceExponent_congr
+      (S := positiveVisibleCanonicalDenominatorSet eulerCoeff)
+      (T := visibleFloorSumASet (Real.exp 1))
+      positiveVisibleCanonicalDenominatorSet_eulerCoeff_eq_A_exp_one_trunc)
+
+theorem positiveVisibleAdditiveEnergyExponent_eulerCoeff_eq_floorSumA_exp_one :
+    positiveVisibleAdditiveEnergyExponent eulerCoeff =
+      floorSumAAdditiveEnergyExponent (Real.exp 1) := by
+  simpa [positiveVisibleAdditiveEnergyExponent,
+    floorSumAAdditiveEnergyExponent, additiveEnergyExponentOf] using
+    (additiveEnergyExponent_congr
+      (S := positiveVisibleCanonicalDenominatorSet eulerCoeff)
+      (T := visibleFloorSumASet (Real.exp 1))
+      positiveVisibleCanonicalDenominatorSet_eulerCoeff_eq_A_exp_one_trunc)
+
+theorem positiveVisibleHilbertCubeExponent_eulerCoeff_eq_floorSumA_exp_one :
+    positiveVisibleHilbertCubeExponent eulerCoeff =
+      floorSumAHilbertCubeExponent (Real.exp 1) := by
+  simpa [positiveVisibleHilbertCubeExponent,
+    floorSumAHilbertCubeExponent, hilbertCubeExponentOf] using
+    (hilbertCubeExponent_congr
+      (S := positiveVisibleCanonicalDenominatorSet eulerCoeff)
+      (T := visibleFloorSumASet (Real.exp 1))
+      positiveVisibleCanonicalDenominatorSet_eulerCoeff_eq_A_exp_one_trunc)
+
+theorem floorSumAPopularDifferenceExponent_exp_one_eq_zero :
+    floorSumAPopularDifferenceExponent (Real.exp 1) = 0 := by
+  rw [← positiveVisiblePopularDifferenceExponent_eulerCoeff_eq_floorSumA_exp_one]
+  exact positiveVisiblePopularDifferenceExponent_eulerCoeff_eq_zero
+
+theorem floorSumAAdditiveEnergyExponent_exp_one_eq_zero :
+    floorSumAAdditiveEnergyExponent (Real.exp 1) = 0 := by
+  rw [← positiveVisibleAdditiveEnergyExponent_eulerCoeff_eq_floorSumA_exp_one]
+  exact positiveVisibleAdditiveEnergyExponent_eulerCoeff_eq_zero
+
+theorem floorSumAHilbertCubeExponent_exp_one_eq_zero :
+    floorSumAHilbertCubeExponent (Real.exp 1) = 0 := by
+  rw [← positiveVisibleHilbertCubeExponent_eulerCoeff_eq_floorSumA_exp_one]
+  exact positiveVisibleHilbertCubeExponent_eulerCoeff_eq_zero
+
+lemma visibleFloorSumASet_exp_one_subset_visibleCanonicalDenominatorSet
+    (N : ℕ) :
+    visibleFloorSumASet (Real.exp 1) N ⊆
+      visibleCanonicalDenominatorSet eulerCoeff N := by
+  rw [← visibleCanonicalDenominatorSet_eulerCoeff_erase_zero_eq_A_exp_one_trunc N]
+  exact Finset.erase_subset _ _
+
+theorem A_exp_one_popularDifferenceExponent_eq_canonicalBlockExponent :
+    floorSumAPopularDifferenceExponent (Real.exp 1) =
+      canonicalBlockExponent eulerCoeff := by
+  apply le_antisymm
+  · exact
+      (floorSumAPopularDifferenceExponent_le_visiblePopularDifferenceExponent
+        visibleFloorSumASet_exp_one_subset_visibleCanonicalDenominatorSet).trans_eq
+          (visiblePopularDifferenceExponent_eq_canonicalBlockExponent
+            eulerCoeff_pos_succ)
+  · rw [eulerCoeff_canonicalBlockExponent_eq_zero]
+    exact floorSumAPopularDifferenceExponent_nonneg (Real.exp 1)
+
+theorem A_exp_one_additiveEnergyExponent_eq_three_mul_canonicalBlockExponent :
+    floorSumAAdditiveEnergyExponent (Real.exp 1) =
+      3 * canonicalBlockExponent eulerCoeff := by
+  apply le_antisymm
+  · exact
+      (floorSumAAdditiveEnergyExponent_le_visibleAdditiveEnergyExponent
+        visibleFloorSumASet_exp_one_subset_visibleCanonicalDenominatorSet).trans_eq
+          (visibleAdditiveEnergyExponent_eq_three_mul_canonicalBlockExponent
+            eulerCoeff_pos_succ)
+  · rw [eulerCoeff_canonicalBlockExponent_eq_zero]
+    simpa using floorSumAAdditiveEnergyExponent_nonneg (Real.exp 1)
+
+theorem A_exp_one_hilbertCubeExponent_eq_canonicalBlockExponent_div_log_two :
+    floorSumAHilbertCubeExponent (Real.exp 1) =
+      canonicalBlockExponent eulerCoeff / Real.log 2 := by
+  apply le_antisymm
+  · exact
+      (floorSumAHilbertCubeExponent_le_visibleHilbertCubeExponent
+        eulerCoeff_pos_succ
+        visibleFloorSumASet_exp_one_subset_visibleCanonicalDenominatorSet).trans_eq
+          (visibleHilbertCubeExponent_eq_canonicalBlockExponent_div_log_two
+            eulerCoeff_pos_succ)
+  · rw [eulerCoeff_canonicalBlockExponent_eq_zero]
+    simpa using
+      floorSumAHilbertCubeExponent_nonneg_of_subset
+        eulerCoeff_pos_succ
+        visibleFloorSumASet_exp_one_subset_visibleCanonicalDenominatorSet
+
 end IrrationalityAr

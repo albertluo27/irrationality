@@ -10,4 +10,5 @@ import IrrationalityAr.CanonicalBlockGrowth
 import IrrationalityAr.AdditiveBlockBridge
 import IrrationalityAr.EulerContinuedFraction
 import IrrationalityAr.EquivalenceClass
+import IrrationalityAr.GapMonotonicity
 import IrrationalityAr.Variants
