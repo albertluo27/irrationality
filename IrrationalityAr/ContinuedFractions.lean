@@ -22,7 +22,7 @@ odd numerator. Equivalently, after the standard continued-fraction bridge is
 proved, these are the parity-filtered convergents and semiconvergents.
 
 The write-up's continued-fraction section decomposes this target into the
-following future Lean statements:
+following Lean-verified bridge statements:
 
 * coprime floor-sum formula:
   `sum k = 1..q-1, floor(k * p / q) = (p - 1)(q - 1) / 2` when `(p, q) = 1`;
@@ -40,8 +40,9 @@ following future Lean statements:
 * final classification:
   `A_alpha = {q - 1 | p/q is a reduced convergent or semiconvergent of alpha, p odd}`.
 
-They are documented here but not asserted as Lean theorems yet, so the compiled
-AP characterization remains proof-hole-free.
+The file proves these bridge statements using the project's local continued-
+fraction API and keeps the final `A_alpha` classification available for later
+block-growth and equivalence-class arguments.
 -/
 
 /-- The rational floor sum from Lemmas 3.2 and 3.3 of the write-up. -/

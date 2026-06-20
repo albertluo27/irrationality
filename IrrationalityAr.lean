@@ -6,6 +6,7 @@ import IrrationalityAr.RationalCase
 import IrrationalityAr.IrrationalCase
 import IrrationalityAr.Characterization
 import IrrationalityAr.ContinuedFractions
+import IrrationalityAr.Blocks
 import IrrationalityAr.CanonicalBlockGrowth
 import IrrationalityAr.AdditiveBlockBridge
 import IrrationalityAr.EulerContinuedFraction
