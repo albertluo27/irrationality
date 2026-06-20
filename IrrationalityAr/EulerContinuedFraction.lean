@@ -27,6 +27,9 @@ def eulerCoeff : ℕ → ℕ
       if n % 3 = 0 then 2 * (n / 3 + 1)
       else 1
 
+/-- Alias matching the mathematical notation for Euler's partial quotients. -/
+abbrev eulerPartialQuotients : ℕ → ℕ := eulerCoeff
+
 theorem eulerCoeff_hasEulerPartialQuotients :
     HasEulerPartialQuotients eulerCoeff := by
   refine ⟨rfl, rfl, ?_⟩
@@ -44,10 +47,418 @@ theorem eulerCoeff_pos_succ (n : ℕ) :
     0 < eulerCoeff (n + 1) :=
   eulerPartialQuotients_pos_succ eulerCoeff_hasEulerPartialQuotients n
 
+private theorem eulerCoeff_six_mul_add_one (r : ℕ) :
+    eulerCoeff (6 * r + 1) = 1 := by
+  cases r with
+  | zero =>
+      norm_num [eulerCoeff]
+  | succ r =>
+      rw [show 6 * (r + 1) + 1 = 3 * (2 * r + 1) + 4 by ring]
+      exact (eulerCoeff_hasEulerPartialQuotients.2.2 (2 * r + 1)).2.2
+
+private theorem eulerCoeff_six_mul_add_two (r : ℕ) :
+    eulerCoeff (6 * r + 2) = 4 * r + 2 := by
+  rw [show 6 * r + 2 = 3 * (2 * r) + 2 by ring]
+  rw [(eulerCoeff_hasEulerPartialQuotients.2.2 (2 * r)).1]
+  ring
+
+private theorem eulerCoeff_six_mul_add_three (r : ℕ) :
+    eulerCoeff (6 * r + 3) = 1 := by
+  rw [show 6 * r + 3 = 3 * (2 * r) + 3 by ring]
+  exact (eulerCoeff_hasEulerPartialQuotients.2.2 (2 * r)).2.1
+
+private theorem eulerCoeff_six_mul_add_four (r : ℕ) :
+    eulerCoeff (6 * r + 4) = 1 := by
+  rw [show 6 * r + 4 = 3 * (2 * r) + 4 by ring]
+  exact (eulerCoeff_hasEulerPartialQuotients.2.2 (2 * r)).2.2
+
+private theorem eulerCoeff_six_mul_add_five (r : ℕ) :
+    eulerCoeff (6 * r + 5) = 4 * r + 4 := by
+  rw [show 6 * r + 5 = 3 * (2 * r + 1) + 2 by ring]
+  rw [(eulerCoeff_hasEulerPartialQuotients.2.2 (2 * r + 1)).1]
+  ring
+
+private theorem eulerCoeff_six_mul_add_six (r : ℕ) :
+    eulerCoeff (6 * r + 6) = 1 := by
+  rw [show 6 * r + 6 = 3 * (2 * r + 1) + 3 by ring]
+  exact (eulerCoeff_hasEulerPartialQuotients.2.2 (2 * r + 1)).2.1
+
+private theorem eulerCoeff_num_parity_cycle (r : ℕ) :
+    Even (continuantNum eulerCoeff (6 * r)) ∧
+    Odd (continuantNum eulerCoeff (6 * r + 1)) ∧
+    Even (continuantNum eulerCoeff (6 * r + 2)) ∧
+    Odd (continuantNum eulerCoeff (6 * r + 3)) ∧
+    Odd (continuantNum eulerCoeff (6 * r + 4)) ∧
+    Odd (continuantNum eulerCoeff (6 * r + 5)) := by
+  induction r with
+  | zero =>
+      norm_num [continuantNum, eulerCoeff]
+  | succ r ih =>
+      rcases ih with ⟨hp0, hp1, hp2, hp3, hp4, hp5⟩
+      have ha6 : eulerCoeff (6 * r + 6) = 1 := by
+        rw [show 6 * r + 6 = 3 * (2 * r + 1) + 3 by ring]
+        exact (eulerCoeff_hasEulerPartialQuotients.2.2 (2 * r + 1)).2.1
+      have ha7 : eulerCoeff (6 * r + 7) = 1 := by
+        rw [show 6 * r + 7 = 3 * (2 * r + 1) + 4 by ring]
+        exact (eulerCoeff_hasEulerPartialQuotients.2.2 (2 * r + 1)).2.2
+      have ha8even : Even (eulerCoeff (6 * r + 8)) := by
+        rw [show 6 * r + 8 = 3 * (2 * r + 2) + 2 by ring]
+        rw [(eulerCoeff_hasEulerPartialQuotients.2.2 (2 * r + 2)).1]
+        exact ⟨2 * r + 3, by ring⟩
+      have ha9 : eulerCoeff (6 * r + 9) = 1 := by
+        rw [show 6 * r + 9 = 3 * (2 * r + 2) + 3 by ring]
+        exact (eulerCoeff_hasEulerPartialQuotients.2.2 (2 * r + 2)).2.1
+      have ha10 : eulerCoeff (6 * r + 10) = 1 := by
+        rw [show 6 * r + 10 = 3 * (2 * r + 2) + 4 by ring]
+        exact (eulerCoeff_hasEulerPartialQuotients.2.2 (2 * r + 2)).2.2
+      have ha11even : Even (eulerCoeff (6 * r + 11)) := by
+        rw [show 6 * r + 11 = 3 * (2 * r + 3) + 2 by ring]
+        rw [(eulerCoeff_hasEulerPartialQuotients.2.2 (2 * r + 3)).1]
+        exact ⟨2 * r + 4, by ring⟩
+      have hp6 : Even (continuantNum eulerCoeff (6 * r + 6)) := by
+        rw [show 6 * r + 6 = (6 * r + 4) + 2 by omega]
+        simp [continuantNum, ha6]
+        exact hp5.add_odd hp4
+      have hp7 : Odd (continuantNum eulerCoeff (6 * r + 7)) := by
+        rw [show 6 * r + 7 = (6 * r + 5) + 2 by omega]
+        simp [continuantNum, ha7]
+        exact hp6.add_odd hp5
+      have hp8 : Even (continuantNum eulerCoeff (6 * r + 8)) := by
+        rw [show 6 * r + 8 = (6 * r + 6) + 2 by omega]
+        simp [continuantNum]
+        exact (ha8even.mul_right _).add hp6
+      have hp9 : Odd (continuantNum eulerCoeff (6 * r + 9)) := by
+        rw [show 6 * r + 9 = (6 * r + 7) + 2 by omega]
+        simp [continuantNum, ha9]
+        exact hp8.add_odd hp7
+      have hp10 : Odd (continuantNum eulerCoeff (6 * r + 10)) := by
+        rw [show 6 * r + 10 = (6 * r + 8) + 2 by omega]
+        simp [continuantNum, ha10]
+        exact hp9.add_even hp8
+      have hp11 : Odd (continuantNum eulerCoeff (6 * r + 11)) := by
+        rw [show 6 * r + 11 = (6 * r + 9) + 2 by omega]
+        simp [continuantNum]
+        exact (ha11even.mul_right _).add_odd hp9
+      rw [show 6 * (r + 1) = 6 * r + 6 by ring]
+      refine ⟨hp6, ?_, ?_, ?_, ?_, ?_⟩
+      · simpa [Nat.add_assoc] using hp7
+      · simpa [Nat.add_assoc] using hp8
+      · simpa [Nat.add_assoc] using hp9
+      · simpa [Nat.add_assoc] using hp10
+      · simpa [Nat.add_assoc] using hp11
+
+private theorem eulerCoeff_prev_curr_parity_six_mul (r : ℕ) :
+    Odd (continuantNumPrev eulerCoeff (6 * r)) ∧
+    Even (continuantNum eulerCoeff (6 * r)) := by
+  constructor
+  · cases r with
+    | zero =>
+        norm_num [continuantNumPrev]
+    | succ r =>
+        rw [show 6 * (r + 1) = 6 * r + 6 by ring]
+        change Odd (continuantNum eulerCoeff (6 * r + 5))
+        exact (eulerCoeff_num_parity_cycle r).2.2.2.2.2
+  · exact (eulerCoeff_num_parity_cycle r).1
+
+private theorem eulerCoeff_prev_curr_parity_six_mul_add_one (r : ℕ) :
+    Even (continuantNumPrev eulerCoeff (6 * r + 1)) ∧
+    Odd (continuantNum eulerCoeff (6 * r + 1)) := by
+  simpa [continuantNumPrev] using
+    ⟨(eulerCoeff_num_parity_cycle r).1,
+      (eulerCoeff_num_parity_cycle r).2.1⟩
+
+private theorem eulerCoeff_prev_curr_parity_six_mul_add_two (r : ℕ) :
+    Odd (continuantNumPrev eulerCoeff (6 * r + 2)) ∧
+    Even (continuantNum eulerCoeff (6 * r + 2)) := by
+  simpa [continuantNumPrev, Nat.add_assoc] using
+    ⟨(eulerCoeff_num_parity_cycle r).2.1,
+      (eulerCoeff_num_parity_cycle r).2.2.1⟩
+
+private theorem eulerCoeff_prev_curr_parity_six_mul_add_three (r : ℕ) :
+    Even (continuantNumPrev eulerCoeff (6 * r + 3)) ∧
+    Odd (continuantNum eulerCoeff (6 * r + 3)) := by
+  simpa [continuantNumPrev, Nat.add_assoc] using
+    ⟨(eulerCoeff_num_parity_cycle r).2.2.1,
+      (eulerCoeff_num_parity_cycle r).2.2.2.1⟩
+
+private theorem eulerCoeff_prev_curr_parity_six_mul_add_four (r : ℕ) :
+    Odd (continuantNumPrev eulerCoeff (6 * r + 4)) ∧
+    Odd (continuantNum eulerCoeff (6 * r + 4)) := by
+  simpa [continuantNumPrev, Nat.add_assoc] using
+    ⟨(eulerCoeff_num_parity_cycle r).2.2.2.1,
+      (eulerCoeff_num_parity_cycle r).2.2.2.2.1⟩
+
+private theorem eulerCoeff_prev_curr_parity_six_mul_add_five (r : ℕ) :
+    Odd (continuantNumPrev eulerCoeff (6 * r + 5)) ∧
+    Odd (continuantNum eulerCoeff (6 * r + 5)) := by
+  simpa [continuantNumPrev, Nat.add_assoc] using
+    ⟨(eulerCoeff_num_parity_cycle r).2.2.2.2.1,
+      (eulerCoeff_num_parity_cycle r).2.2.2.2.2⟩
+
+theorem eulerCoeff_odd_CFBlockNumerator_six_mul
+    (r t : ℕ) :
+    Odd (CFBlockNumerator eulerCoeff (6 * r) t) :=
+  odd_CFBlockNumerator_of_prev_odd_curr_even
+    (eulerCoeff_prev_curr_parity_six_mul r).1
+    (eulerCoeff_prev_curr_parity_six_mul r).2
+
+theorem eulerCoeff_odd_CFBlockNumerator_six_mul_add_one_iff
+    (r t : ℕ) :
+    Odd (CFBlockNumerator eulerCoeff (6 * r + 1) t) ↔ Odd t :=
+  odd_CFBlockNumerator_iff_of_prev_even_curr_odd
+    (eulerCoeff_prev_curr_parity_six_mul_add_one r).1
+    (eulerCoeff_prev_curr_parity_six_mul_add_one r).2
+
+theorem eulerCoeff_odd_CFBlockNumerator_six_mul_add_two
+    (r t : ℕ) :
+    Odd (CFBlockNumerator eulerCoeff (6 * r + 2) t) :=
+  odd_CFBlockNumerator_of_prev_odd_curr_even
+    (eulerCoeff_prev_curr_parity_six_mul_add_two r).1
+    (eulerCoeff_prev_curr_parity_six_mul_add_two r).2
+
+theorem eulerCoeff_odd_CFBlockNumerator_six_mul_add_three_iff
+    (r t : ℕ) :
+    Odd (CFBlockNumerator eulerCoeff (6 * r + 3) t) ↔ Odd t :=
+  odd_CFBlockNumerator_iff_of_prev_even_curr_odd
+    (eulerCoeff_prev_curr_parity_six_mul_add_three r).1
+    (eulerCoeff_prev_curr_parity_six_mul_add_three r).2
+
+theorem eulerCoeff_odd_CFBlockNumerator_six_mul_add_four_iff
+    (r t : ℕ) :
+    Odd (CFBlockNumerator eulerCoeff (6 * r + 4) t) ↔ Even t :=
+  odd_CFBlockNumerator_iff_of_prev_odd_curr_odd
+    (eulerCoeff_prev_curr_parity_six_mul_add_four r).1
+    (eulerCoeff_prev_curr_parity_six_mul_add_four r).2
+
+theorem eulerCoeff_odd_CFBlockNumerator_six_mul_add_five_iff
+    (r t : ℕ) :
+    Odd (CFBlockNumerator eulerCoeff (6 * r + 5) t) ↔ Even t :=
+  odd_CFBlockNumerator_iff_of_prev_odd_curr_odd
+    (eulerCoeff_prev_curr_parity_six_mul_add_five r).1
+    (eulerCoeff_prev_curr_parity_six_mul_add_five r).2
+
+/-- The five-family explicit classification set from the Euler parity table.
+
+This is the right-hand side of the pasted classification theorem. The remaining
+bridge is to identify this set with the literal floor-sum set
+`A (Real.exp 1)`. -/
+def eulerExplicitASet : Set ℕ :=
+  {n : ℕ |
+    (∃ r : ℕ,
+      1 ≤ r ∧
+        n = continuantDen eulerCoeff (6 * r + 1) - 1) ∨
+    (∃ r s : ℕ,
+      s ≤ 2 * r ∧
+        n = continuantDen eulerCoeff (6 * r) +
+          (2 * s + 1) * continuantDen eulerCoeff (6 * r + 1) - 1) ∨
+    (∃ r : ℕ,
+      n = continuantDen eulerCoeff (6 * r + 3) - 1) ∨
+    (∃ r : ℕ,
+      n = continuantDen eulerCoeff (6 * r + 4) - 1) ∨
+    (∃ r s : ℕ,
+      1 ≤ s ∧ s ≤ 2 * r + 2 ∧
+        n = continuantDen eulerCoeff (6 * r + 3) +
+          2 * s * continuantDen eulerCoeff (6 * r + 4) - 1)}
+
+private theorem exists_eq_six_mul_add_lt (j : ℕ) :
+    ∃ r k : ℕ, k < 6 ∧ j = 6 * r + k := by
+  refine ⟨j / 6, j % 6, Nat.mod_lt j (by norm_num), ?_⟩
+  have h := Nat.div_add_mod j 6
+  have h' : 6 * (j / 6) + j % 6 = j := by
+    simpa [Nat.mul_comm] using h
+  exact h'.symm
+
+/-- Euler's parity table gives the explicit five-family classification of the
+odd-numerator continued-fraction block denominator set. -/
+theorem oddBlockASet_eulerCoeff_eq_eulerExplicitASet :
+    oddBlockASet eulerCoeff = eulerExplicitASet := by
+  ext n
+  constructor
+  · rintro ⟨j, t, ht1, htle, hodd, hQ2, hnQ⟩
+    rcases exists_eq_six_mul_add_lt j with ⟨r, k, hk, rfl⟩
+    interval_cases k
+    · have hcoeff : eulerCoeff (6 * r + 1) = 1 :=
+        eulerCoeff_six_mul_add_one r
+      have ht : t = 1 := by
+        rw [hcoeff] at htle
+        omega
+      subst t
+      have hrpos : 1 ≤ r := by
+        by_contra hr
+        have hr0 : r = 0 := by omega
+        subst r
+        norm_num [CFBlockDenominator, continuantDenPrev, continuantDen] at hQ2
+      left
+      refine ⟨r, hrpos, ?_⟩
+      have hden :
+          CFBlockDenominator eulerCoeff (6 * r) 1 =
+            continuantDen eulerCoeff (6 * r + 1) := by
+        simpa [hcoeff] using
+          CFBlockDenominator_endpoint eulerCoeff (6 * r)
+      simpa [hden] using hnQ
+    · have hcoeff : eulerCoeff (6 * r + 2) = 4 * r + 2 :=
+        eulerCoeff_six_mul_add_two r
+      have htodd : Odd t :=
+        (eulerCoeff_odd_CFBlockNumerator_six_mul_add_one_iff r t).1 hodd
+      rcases htodd with ⟨s, rfl⟩
+      have hsle : s ≤ 2 * r := by
+        rw [hcoeff] at htle
+        omega
+      right
+      left
+      refine ⟨r, s, hsle, ?_⟩
+      simpa [CFBlockDenominator, continuantDenPrev, Nat.add_assoc,
+        mul_assoc] using hnQ
+    · have hcoeff : eulerCoeff (6 * r + 3) = 1 :=
+        eulerCoeff_six_mul_add_three r
+      have ht : t = 1 := by
+        rw [hcoeff] at htle
+        omega
+      subst t
+      right
+      right
+      left
+      refine ⟨r, ?_⟩
+      have hden :
+          CFBlockDenominator eulerCoeff (6 * r + 2) 1 =
+            continuantDen eulerCoeff (6 * r + 3) := by
+        simpa [hcoeff, Nat.add_assoc] using
+          CFBlockDenominator_endpoint eulerCoeff (6 * r + 2)
+      simpa [hden] using hnQ
+    · have hcoeff : eulerCoeff (6 * r + 4) = 1 :=
+        eulerCoeff_six_mul_add_four r
+      have ht : t = 1 := by
+        rw [hcoeff] at htle
+        omega
+      subst t
+      right
+      right
+      right
+      left
+      refine ⟨r, ?_⟩
+      have hden :
+          CFBlockDenominator eulerCoeff (6 * r + 3) 1 =
+            continuantDen eulerCoeff (6 * r + 4) := by
+        simpa [hcoeff, Nat.add_assoc] using
+          CFBlockDenominator_endpoint eulerCoeff (6 * r + 3)
+      simpa [hden] using hnQ
+    · have hcoeff : eulerCoeff (6 * r + 5) = 4 * r + 4 :=
+        eulerCoeff_six_mul_add_five r
+      have hteven : Even t :=
+        (eulerCoeff_odd_CFBlockNumerator_six_mul_add_four_iff r t).1 hodd
+      rcases hteven with ⟨s, rfl⟩
+      have hspos : 1 ≤ s := by omega
+      have hsle : s ≤ 2 * r + 2 := by
+        rw [hcoeff] at htle
+        omega
+      right
+      right
+      right
+      right
+      refine ⟨r, s, hspos, hsle, ?_⟩
+      have hden :
+          CFBlockDenominator eulerCoeff (6 * r + 4) (s + s) =
+            continuantDen eulerCoeff (6 * r + 3) +
+              2 * s * continuantDen eulerCoeff (6 * r + 4) := by
+        simp [CFBlockDenominator, continuantDenPrev]
+        rw [show s + s = 2 * s by omega]
+        left
+        rfl
+      simpa [hden] using hnQ
+    · have hcoeff : eulerCoeff (6 * r + 6) = 1 :=
+        eulerCoeff_six_mul_add_six r
+      have ht : t = 1 := by
+        rw [hcoeff] at htle
+        omega
+      have hteven : Even t :=
+        (eulerCoeff_odd_CFBlockNumerator_six_mul_add_five_iff r t).1 hodd
+      subst t
+      norm_num at hteven
+  · intro hn
+    rcases hn with h₁ | h₂ | h₃ | h₄ | h₅
+    · rcases h₁ with ⟨r, hrpos, hn⟩
+      refine ⟨6 * r, 1, by norm_num, ?_, ?_, ?_, ?_⟩
+      · simp [eulerCoeff_six_mul_add_one r]
+      · exact eulerCoeff_odd_CFBlockNumerator_six_mul r 1
+      · exact two_le_CFBlockDenominator_of_one_le_index
+          eulerCoeff_pos_succ (by omega) (by norm_num)
+      · have hden :
+            CFBlockDenominator eulerCoeff (6 * r) 1 =
+              continuantDen eulerCoeff (6 * r + 1) := by
+          simpa [eulerCoeff_six_mul_add_one r] using
+            CFBlockDenominator_endpoint eulerCoeff (6 * r)
+        simpa [hden] using hn
+    · rcases h₂ with ⟨r, s, hsle, hn⟩
+      refine ⟨6 * r + 1, 2 * s + 1, by omega, ?_, ?_, ?_, ?_⟩
+      · rw [eulerCoeff_six_mul_add_two r]
+        omega
+      · exact
+          (eulerCoeff_odd_CFBlockNumerator_six_mul_add_one_iff
+            r (2 * s + 1)).2 ⟨s, by ring⟩
+      · exact two_le_CFBlockDenominator_of_one_le_index
+          eulerCoeff_pos_succ (by omega) (by omega)
+      · simpa [CFBlockDenominator, continuantDenPrev, Nat.add_assoc,
+          mul_assoc] using hn
+    · rcases h₃ with ⟨r, hn⟩
+      refine ⟨6 * r + 2, 1, by norm_num, ?_, ?_, ?_, ?_⟩
+      · simp [eulerCoeff_six_mul_add_three r]
+      · exact eulerCoeff_odd_CFBlockNumerator_six_mul_add_two r 1
+      · exact two_le_CFBlockDenominator_of_one_le_index
+          eulerCoeff_pos_succ (by omega) (by norm_num)
+      · have hden :
+            CFBlockDenominator eulerCoeff (6 * r + 2) 1 =
+              continuantDen eulerCoeff (6 * r + 3) := by
+          simpa [eulerCoeff_six_mul_add_three r, Nat.add_assoc] using
+            CFBlockDenominator_endpoint eulerCoeff (6 * r + 2)
+        simpa [hden] using hn
+    · rcases h₄ with ⟨r, hn⟩
+      refine ⟨6 * r + 3, 1, by norm_num, ?_, ?_, ?_, ?_⟩
+      · simp [eulerCoeff_six_mul_add_four r]
+      · exact
+          (eulerCoeff_odd_CFBlockNumerator_six_mul_add_three_iff r 1).2
+            ⟨0, by norm_num⟩
+      · exact two_le_CFBlockDenominator_of_one_le_index
+          eulerCoeff_pos_succ (by omega) (by norm_num)
+      · have hden :
+            CFBlockDenominator eulerCoeff (6 * r + 3) 1 =
+              continuantDen eulerCoeff (6 * r + 4) := by
+          simpa [eulerCoeff_six_mul_add_four r, Nat.add_assoc] using
+            CFBlockDenominator_endpoint eulerCoeff (6 * r + 3)
+        simpa [hden] using hn
+    · rcases h₅ with ⟨r, s, hspos, hsle, hn⟩
+      refine ⟨6 * r + 4, 2 * s, by omega, ?_, ?_, ?_, ?_⟩
+      · rw [eulerCoeff_six_mul_add_five r]
+        omega
+      · exact
+          (eulerCoeff_odd_CFBlockNumerator_six_mul_add_four_iff
+            r (2 * s)).2 ⟨s, by ring⟩
+      · exact two_le_CFBlockDenominator_of_one_le_index
+          eulerCoeff_pos_succ (by omega) (by omega)
+      · simpa [CFBlockDenominator, continuantDenPrev, Nat.add_assoc,
+          mul_assoc] using hn
+
 theorem eulerCoeff_canonicalBlockExponent_eq_zero :
     canonicalBlockExponent eulerCoeff = 0 :=
   canonicalBlockExponent_eq_zero_of_eulerPartialQuotients
     eulerCoeff_hasEulerPartialQuotients
+
+theorem euler_visiblePopularDifferenceExponent_eq_zero :
+    visiblePopularDifferenceExponent eulerPartialQuotients = 0 := by
+  rw [visiblePopularDifferenceExponent_eq_canonicalBlockExponent
+    eulerCoeff_pos_succ]
+  exact eulerCoeff_canonicalBlockExponent_eq_zero
+
+theorem euler_visibleAdditiveEnergyExponent_eq_zero :
+    visibleAdditiveEnergyExponent eulerPartialQuotients = 0 := by
+  rw [visibleAdditiveEnergyExponent_eq_three_mul_canonicalBlockExponent
+    eulerCoeff_pos_succ]
+  simp [eulerCoeff_canonicalBlockExponent_eq_zero]
+
+theorem euler_visibleHilbertCubeExponent_eq_zero :
+    visibleHilbertCubeExponent eulerPartialQuotients = 0 := by
+  rw [visibleHilbertCubeExponent_eq_canonicalBlockExponent_div_log_two
+    eulerCoeff_pos_succ]
+  simp [eulerCoeff_canonicalBlockExponent_eq_zero]
 
 theorem eulerCoeff_partialQuotientGrowthTau_eq_zero :
     partialQuotientGrowthTau eulerCoeff = 0 :=
@@ -1081,6 +1492,25 @@ theorem exp_one_isSimpleCFExpansion_eulerCoeff :
     eulerCoeff_pos_succ
     eulerCoeff_convergents_tendsto_exp_one
 
+/-- The floor-sum set for `e` is the odd-numerator
+principal/intermediate block-denominator set attached to Euler's continued
+fraction coefficients. -/
+theorem A_exp_one_eq_oddBlockASet_eulerCoeff
+    (hexpirr : IsIrrational (Real.exp 1)) :
+    A (Real.exp 1) = oddBlockASet eulerCoeff :=
+  A_eq_oddBlockASet_of_IsSimpleCFExpansion
+    (Real.exp_pos 1)
+    hexpirr
+    exp_one_isSimpleCFExpansion_eulerCoeff
+
+/-- Complete explicit classification of the floor-sum set `A_e`, conditional
+only on irrationality of `e`. -/
+theorem A_exp_one_eq_eulerExplicitASet
+    (hexpirr : IsIrrational (Real.exp 1)) :
+    A (Real.exp 1) = eulerExplicitASet := by
+  rw [A_exp_one_eq_oddBlockASet_eulerCoeff hexpirr]
+  exact oddBlockASet_eulerCoeff_eq_eulerExplicitASet
+
 theorem exp_one_hasIrrationalityMeasure_two_of_CF_measure_bridge
     (hbridge :
       ∀ {α : ℝ} {a : ℕ → ℕ} {μ : ℝ},
@@ -1128,5 +1558,77 @@ theorem exp_one_hasIrrationalityMeasure_two :
   irrationalityMeasure_eq_two_of_denominatorRatio_tendsto_one
     exp_one_isSimpleCFExpansion_eulerCoeff
     eulerCoeff_denominatorRatio_tendsto_one
+
+/-- A real number with project-level irrationality measure `2` is irrational.
+
+If `α = p / q` were rational, then every large multiple of `q` would give an
+exact rational approximation with error `0`, contradicting the upper-failure
+clause in `HasIrrationalityMeasure α 2` at exponent `3`. -/
+theorem isIrrational_of_hasIrrationalityMeasure_two
+    {α : ℝ}
+    (hμ : HasIrrationalityMeasure α 2) :
+    IsIrrational α := by
+  intro hrat
+  rcases hrat with ⟨r, hr⟩
+  rcases hμ with ⟨_, hupper⟩
+  have hbadEventually :
+      ∀ᶠ q : ℕ in atTop,
+        ∀ p : ℤ,
+          0 < q →
+            ¬ |α - (p : ℝ) / (q : ℝ)| < (q : ℝ) ^ (-(3 : ℝ)) :=
+    hupper 3 (by norm_num)
+  rcases eventually_atTop.1 hbadEventually with ⟨N, hN⟩
+
+  let k : ℕ := N + 1
+  let Q : ℕ := r.den * k
+  let P : ℤ := r.num * (k : ℤ)
+
+  have hkpos : 0 < k := by
+    dsimp [k]
+    omega
+  have hdenpos : 0 < r.den := r.den_pos
+  have hQpos : 0 < Q := by
+    dsimp [Q]
+    exact Nat.mul_pos hdenpos hkpos
+  have hQge : N ≤ Q := by
+    have hden_ge_one : 1 ≤ r.den := Nat.succ_le_of_lt hdenpos
+    have hkge : N + 1 ≤ Q := by
+      dsimp [Q, k]
+      simpa [one_mul] using
+        (Nat.mul_le_mul_right (N + 1) hden_ge_one)
+    exact (Nat.le_succ N).trans hkge
+
+  have hbad := hN Q hQge P hQpos
+
+  have hrat_eq :
+      α = (P : ℝ) / (Q : ℝ) := by
+    rw [← hr]
+    have hkR : (k : ℝ) ≠ 0 := by
+      exact_mod_cast Nat.ne_of_gt hkpos
+    have hdenR : (r.den : ℝ) ≠ 0 := by
+      exact_mod_cast Nat.ne_of_gt hdenpos
+    calc
+      (r : ℝ)
+          = (r.num : ℝ) / (r.den : ℝ) := by
+              rw [Rat.cast_def]
+      _ = ((r.num : ℝ) * (k : ℝ)) /
+            ((r.den : ℝ) * (k : ℝ)) := by
+              field_simp [hkR, hdenR]
+      _ = (P : ℝ) / (Q : ℝ) := by
+              simp [P, Q, Int.cast_mul, Nat.cast_mul]
+
+  have hpowpos : 0 < (Q : ℝ) ^ (-(3 : ℝ)) := by
+    exact Real.rpow_pos_of_pos (by exact_mod_cast hQpos) _
+  apply hbad
+  rw [hrat_eq, sub_self, abs_zero]
+  exact hpowpos
+
+theorem exp_one_irrational : IsIrrational (Real.exp 1) :=
+  isIrrational_of_hasIrrationalityMeasure_two
+    exp_one_hasIrrationalityMeasure_two
+
+theorem A_exp_one_eq_eulerExplicitASet_unconditional :
+    A (Real.exp 1) = eulerExplicitASet :=
+  A_exp_one_eq_eulerExplicitASet exp_one_irrational
 
 end IrrationalityAr

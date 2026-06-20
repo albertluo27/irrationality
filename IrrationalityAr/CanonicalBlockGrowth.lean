@@ -1,4 +1,5 @@
 import IrrationalityAr.ContinuedFractions
+import IrrationalityAr.AdditiveBlockBridge
 import Mathlib.Analysis.SpecialFunctions.Log.Basic
 import Mathlib.Analysis.SpecialFunctions.Log.Base
 import Mathlib.Analysis.SpecialFunctions.Pow.Asymptotics
@@ -46,6 +47,17 @@ def CFBlockNumerator (a : ℕ → ℕ) (j t : ℕ) : ℕ :=
 `Q_{j,t} = q_{j-1} + t q_j`. -/
 def CFBlockDenominator (a : ℕ → ℕ) (j t : ℕ) : ℕ :=
   continuantDenPrev a j + t * continuantDen a j
+
+/-- The `A`-set described by odd-numerator principal/intermediate
+continued-fraction block denominators attached to a chosen coefficient
+sequence. -/
+def oddBlockASet (a : ℕ → ℕ) : Set ℕ :=
+  {n : ℕ |
+    ∃ j t : ℕ,
+      1 ≤ t ∧ t ≤ a (j + 1) ∧
+        Odd (CFBlockNumerator a j t) ∧
+        2 ≤ CFBlockDenominator a j t ∧
+        n = CFBlockDenominator a j t - 1}
 
 /-- A set of natural numbers has nondecreasing gaps between consecutive
 members.  This avoids choosing an explicit increasing enumeration
@@ -1171,6 +1183,794 @@ lemma canonicalOddCFIndex_iff_mem_canonicalOddBlock {a : ℕ → ℕ} {j t : ℕ
   rw [mem_canonicalOddBlock_iff]
   rfl
 
+/-- Denominators `q - 1` coming from the parity-selected part of one
+canonical continued-fraction block. -/
+def canonicalOddDenominatorBlock (a : ℕ → ℕ) (j : ℕ) : Finset ℕ :=
+  (canonicalOddBlock a j).image
+    fun t : ℕ => CFBlockDenominator a j t - 1
+
+private lemma CFBlockDenominator_sub_one_injOn_canonicalOddBlock
+    (a : ℕ → ℕ)
+    (hpos : ∀ n : ℕ, 0 < a (n + 1))
+    (j : ℕ) :
+    Set.InjOn
+      (fun t : ℕ => CFBlockDenominator a j t - 1)
+      (canonicalOddBlock a j : Set ℕ) := by
+  intro x hx y hy hxy
+  have hqpos : 0 < continuantDen a j :=
+    lt_of_lt_of_le Nat.zero_lt_one
+      (one_le_continuantDen_of_partials_pos_global a hpos j)
+  have hxone : 1 ≤ x := (mem_canonicalOddBlock_iff.mp hx).1
+  have hyone : 1 ≤ y := (mem_canonicalOddBlock_iff.mp hy).1
+  have hxdenpos : 0 < CFBlockDenominator a j x := by
+    unfold CFBlockDenominator
+    exact Nat.add_pos_right _ (Nat.mul_pos hxone hqpos)
+  have hydenpos : 0 < CFBlockDenominator a j y := by
+    unfold CFBlockDenominator
+    exact Nat.add_pos_right _ (Nat.mul_pos hyone hqpos)
+  change CFBlockDenominator a j x - 1 =
+    CFBlockDenominator a j y - 1 at hxy
+  have hden :
+      CFBlockDenominator a j x = CFBlockDenominator a j y := by
+    calc
+      CFBlockDenominator a j x =
+          (CFBlockDenominator a j x - 1) + 1 := by
+            exact (Nat.sub_add_cancel (Nat.succ_le_of_lt hxdenpos)).symm
+      _ = (CFBlockDenominator a j y - 1) + 1 := by rw [hxy]
+      _ = CFBlockDenominator a j y := by
+            exact Nat.sub_add_cancel (Nat.succ_le_of_lt hydenpos)
+  have hmul : x * continuantDen a j = y * continuantDen a j := by
+    unfold CFBlockDenominator at hden
+    exact Nat.add_left_cancel hden
+  exact mul_right_cancel₀ (Nat.ne_of_gt hqpos) hmul
+
+lemma canonicalOddDenominatorBlock_card
+    (a : ℕ → ℕ)
+    (hpos : ∀ n : ℕ, 0 < a (n + 1))
+    (j : ℕ) :
+    (canonicalOddDenominatorBlock a j).card =
+      canonicalBlockLength a j := by
+  unfold canonicalOddDenominatorBlock canonicalBlockLength
+  exact Finset.card_image_of_injOn
+    (CFBlockDenominator_sub_one_injOn_canonicalOddBlock a hpos j)
+
+private lemma odd_Icc_eq_image_range (m : ℕ) :
+    ((Finset.Icc 1 m).filter fun t : ℕ => Odd t) =
+      (Finset.range ((m + 1) / 2)).image fun r : ℕ => 2 * r + 1 := by
+  ext t
+  constructor
+  · intro ht
+    rw [Finset.mem_filter, Finset.mem_Icc] at ht
+    rcases ht with ⟨⟨ht1, htm⟩, htodd⟩
+    rcases htodd with ⟨r, rfl⟩
+    rw [Finset.mem_image]
+    refine ⟨r, ?_, rfl⟩
+    rw [Finset.mem_range]
+    omega
+  · intro ht
+    rw [Finset.mem_image] at ht
+    rcases ht with ⟨r, hr, rfl⟩
+    rw [Finset.mem_range] at hr
+    rw [Finset.mem_filter, Finset.mem_Icc]
+    exact ⟨⟨by omega, by omega⟩, ⟨r, rfl⟩⟩
+
+private lemma even_Icc_eq_image_range (m : ℕ) :
+    ((Finset.Icc 1 m).filter fun t : ℕ => Even t) =
+      (Finset.range (m / 2)).image fun r : ℕ => 2 * (r + 1) := by
+  ext t
+  constructor
+  · intro ht
+    rw [Finset.mem_filter, Finset.mem_Icc] at ht
+    rcases ht with ⟨⟨ht1, htm⟩, hteven⟩
+    rcases hteven with ⟨k, hk⟩
+    have hkpos : 0 < k := by omega
+    rw [Finset.mem_image]
+    refine ⟨k - 1, ?_, ?_⟩
+    · rw [Finset.mem_range]
+      omega
+    · omega
+  · intro ht
+    rw [Finset.mem_image] at ht
+    rcases ht with ⟨r, hr, rfl⟩
+    rw [Finset.mem_range] at hr
+    rw [Finset.mem_filter, Finset.mem_Icc]
+    exact ⟨⟨by omega, by omega⟩, ⟨r + 1, by omega⟩⟩
+
+private lemma card_odd_Icc (m : ℕ) :
+    (((Finset.Icc 1 m).filter fun t : ℕ => Odd t).card) = (m + 1) / 2 := by
+  rw [odd_Icc_eq_image_range]
+  rw [Finset.card_image_of_injOn]
+  · simp
+  · intro x _ y _ hxy
+    change 2 * x + 1 = 2 * y + 1 at hxy
+    omega
+
+private lemma card_even_Icc (m : ℕ) :
+    (((Finset.Icc 1 m).filter fun t : ℕ => Even t).card) = m / 2 := by
+  rw [even_Icc_eq_image_range]
+  rw [Finset.card_image_of_injOn]
+  · simp
+  · intro x _ y _ hxy
+    change 2 * (x + 1) = 2 * (y + 1) at hxy
+    omega
+
+private lemma denominator_sub_one_one_step
+    (b q r : ℕ) (hq : 0 < q) :
+    (b + 1 * q - 1) + r * q = b + (r + 1) * q - 1 := by
+  apply Nat.succ.inj
+  have hleft : ((b + 1 * q - 1) + r * q) + 1 =
+      b + 1 * q + r * q := by omega
+  have hright : (b + (r + 1) * q - 1) + 1 =
+      b + (r + 1) * q := by
+    have : 1 ≤ b + (r + 1) * q := by
+      exact Nat.succ_le_of_lt (Nat.add_pos_right _ (Nat.mul_pos (by omega) hq))
+    omega
+  calc
+    ((b + 1 * q - 1) + r * q) + 1 = b + 1 * q + r * q := hleft
+    _ = b + (r + 1) * q := by ring
+    _ = (b + (r + 1) * q - 1) + 1 := hright.symm
+
+private lemma denominator_sub_one_odd_step
+    (b q r : ℕ) (hq : 0 < q) :
+    (b + 1 * q - 1) + r * (2 * q) = b + (2 * r + 1) * q - 1 := by
+  apply Nat.succ.inj
+  have hleft : ((b + 1 * q - 1) + r * (2 * q)) + 1 =
+      b + 1 * q + r * (2 * q) := by omega
+  have hright : (b + (2 * r + 1) * q - 1) + 1 =
+      b + (2 * r + 1) * q := by
+    have : 1 ≤ b + (2 * r + 1) * q := by
+      exact Nat.succ_le_of_lt (Nat.add_pos_right _ (Nat.mul_pos (by omega) hq))
+    omega
+  calc
+    ((b + 1 * q - 1) + r * (2 * q)) + 1 =
+        b + 1 * q + r * (2 * q) := hleft
+    _ = b + (2 * r + 1) * q := by ring
+    _ = (b + (2 * r + 1) * q - 1) + 1 := hright.symm
+
+private lemma denominator_sub_one_even_step
+    (b q r : ℕ) (hq : 0 < q) :
+    (b + 2 * q - 1) + r * (2 * q) = b + (2 * (r + 1)) * q - 1 := by
+  apply Nat.succ.inj
+  have hleft : ((b + 2 * q - 1) + r * (2 * q)) + 1 =
+      b + 2 * q + r * (2 * q) := by omega
+  have hright : (b + (2 * (r + 1)) * q - 1) + 1 =
+      b + (2 * (r + 1)) * q := by
+    have : 1 ≤ b + (2 * (r + 1)) * q := by
+      exact Nat.succ_le_of_lt (Nat.add_pos_right _ (Nat.mul_pos (by omega) hq))
+    omega
+  calc
+    ((b + 2 * q - 1) + r * (2 * q)) + 1 =
+        b + 2 * q + r * (2 * q) := hleft
+    _ = b + (2 * (r + 1)) * q := by ring
+    _ = (b + (2 * (r + 1)) * q - 1) + 1 := hright.symm
+
+private lemma canonicalOddBlock_eq_Icc_of_prev_odd_curr_even
+    {a : ℕ → ℕ} {j : ℕ}
+    (hprevOdd : Odd (continuantNumPrev a j))
+    (hcurrEven : Even (continuantNum a j)) :
+    canonicalOddBlock a j = Finset.Icc 1 (a (j + 1)) := by
+  ext t
+  rw [mem_canonicalOddBlock_iff, Finset.mem_Icc]
+  constructor
+  · intro ht
+    exact ⟨ht.1, ht.2.1⟩
+  · intro ht
+    exact ⟨ht.1, ht.2, odd_CFBlockNumerator_of_prev_odd_curr_even hprevOdd hcurrEven⟩
+
+private lemma canonicalOddBlock_eq_odd_filter_of_prev_even_curr_odd
+    {a : ℕ → ℕ} {j : ℕ}
+    (hprevEven : Even (continuantNumPrev a j))
+    (hcurrOdd : Odd (continuantNum a j)) :
+    canonicalOddBlock a j =
+      (Finset.Icc 1 (a (j + 1))).filter fun t : ℕ => Odd t := by
+  ext t
+  rw [mem_canonicalOddBlock_iff, Finset.mem_filter, Finset.mem_Icc]
+  constructor
+  · intro ht
+    exact ⟨⟨ht.1, ht.2.1⟩,
+      (odd_CFBlockNumerator_iff_of_prev_even_curr_odd hprevEven hcurrOdd).1 ht.2.2⟩
+  · intro ht
+    exact ⟨ht.1.1, ht.1.2,
+      (odd_CFBlockNumerator_iff_of_prev_even_curr_odd hprevEven hcurrOdd).2 ht.2⟩
+
+private lemma canonicalOddBlock_eq_even_filter_of_prev_odd_curr_odd
+    {a : ℕ → ℕ} {j : ℕ}
+    (hprevOdd : Odd (continuantNumPrev a j))
+    (hcurrOdd : Odd (continuantNum a j)) :
+    canonicalOddBlock a j =
+      (Finset.Icc 1 (a (j + 1))).filter fun t : ℕ => Even t := by
+  ext t
+  rw [mem_canonicalOddBlock_iff, Finset.mem_filter, Finset.mem_Icc]
+  constructor
+  · intro ht
+    exact ⟨⟨ht.1, ht.2.1⟩,
+      (odd_CFBlockNumerator_iff_of_prev_odd_curr_odd hprevOdd hcurrOdd).1 ht.2.2⟩
+  · intro ht
+    exact ⟨ht.1.1, ht.1.2,
+      (odd_CFBlockNumerator_iff_of_prev_odd_curr_odd hprevOdd hcurrOdd).2 ht.2⟩
+
+lemma exists_finiteArithmeticBlock_subset_canonicalOddDenominatorBlock
+    (a : ℕ → ℕ) (j : ℕ)
+    (hpos : ∀ n : ℕ, 0 < a (n + 1)) :
+    ∃ s d m : ℕ,
+      0 < d ∧
+      m = canonicalBlockLength a j ∧
+      finiteArithmeticBlock s d m ⊆ canonicalOddDenominatorBlock a j := by
+  have hqpos : 0 < continuantDen a j :=
+    lt_of_lt_of_le Nat.zero_lt_one
+      (one_le_continuantDen_of_partials_pos_global a hpos j)
+  rcases Nat.even_or_odd (continuantNum a j) with hcurrEven | hcurrOdd
+  · have hprevOdd : Odd (continuantNumPrev a j) := by
+      rcases Nat.even_or_odd (continuantNumPrev a j) with hprevEven | hprevOdd
+      · exact False.elim
+          (continuantNumPrev_not_even_and_even a j ⟨hprevEven, hcurrEven⟩)
+      · exact hprevOdd
+    have hblock := canonicalOddBlock_eq_Icc_of_prev_odd_curr_even
+      (a := a) (j := j) hprevOdd hcurrEven
+    have hlen : canonicalBlockLength a j = a (j + 1) := by
+      simp [canonicalBlockLength, hblock]
+    refine ⟨CFBlockDenominator a j 1 - 1, continuantDen a j,
+      canonicalBlockLength a j, hqpos, rfl, ?_⟩
+    intro x hx
+    rcases mem_finiteArithmeticBlock_iff.mp hx with ⟨r, hr, rfl⟩
+    rw [canonicalOddDenominatorBlock, Finset.mem_image]
+    refine ⟨r + 1, ?_, ?_⟩
+    · rw [hblock, Finset.mem_Icc]
+      omega
+    · unfold CFBlockDenominator
+      exact (denominator_sub_one_one_step
+        (continuantDenPrev a j) (continuantDen a j) r hqpos).symm
+  · rcases Nat.even_or_odd (continuantNumPrev a j) with hprevEven | hprevOdd
+    · have hblock := canonicalOddBlock_eq_odd_filter_of_prev_even_curr_odd
+        (a := a) (j := j) hprevEven hcurrOdd
+      have hlen : canonicalBlockLength a j = (a (j + 1) + 1) / 2 := by
+        simp [canonicalBlockLength, hblock, card_odd_Icc]
+      refine ⟨CFBlockDenominator a j 1 - 1, 2 * continuantDen a j,
+        canonicalBlockLength a j, Nat.mul_pos (by norm_num) hqpos, rfl, ?_⟩
+      intro x hx
+      rcases mem_finiteArithmeticBlock_iff.mp hx with ⟨r, hr, rfl⟩
+      rw [canonicalOddDenominatorBlock, Finset.mem_image]
+      refine ⟨2 * r + 1, ?_, ?_⟩
+      · rw [hblock, Finset.mem_filter, Finset.mem_Icc]
+        rw [hlen] at hr
+        exact ⟨⟨by omega, by omega⟩, ⟨r, rfl⟩⟩
+      · unfold CFBlockDenominator
+        exact (denominator_sub_one_odd_step
+          (continuantDenPrev a j) (continuantDen a j) r hqpos).symm
+    · have hblock := canonicalOddBlock_eq_even_filter_of_prev_odd_curr_odd
+        (a := a) (j := j) hprevOdd hcurrOdd
+      have hlen : canonicalBlockLength a j = a (j + 1) / 2 := by
+        simp [canonicalBlockLength, hblock, card_even_Icc]
+      refine ⟨CFBlockDenominator a j 2 - 1, 2 * continuantDen a j,
+        canonicalBlockLength a j, Nat.mul_pos (by norm_num) hqpos, rfl, ?_⟩
+      intro x hx
+      rcases mem_finiteArithmeticBlock_iff.mp hx with ⟨r, hr, rfl⟩
+      rw [canonicalOddDenominatorBlock, Finset.mem_image]
+      refine ⟨2 * (r + 1), ?_, ?_⟩
+      · rw [hblock, Finset.mem_filter, Finset.mem_Icc]
+        rw [hlen] at hr
+        exact ⟨⟨by omega, by omega⟩, ⟨r + 1, by omega⟩⟩
+      · unfold CFBlockDenominator
+        exact (denominator_sub_one_even_step
+          (continuantDenPrev a j) (continuantDen a j) r hqpos).symm
+
+/-- The visible part of a canonical denominator block, using the true
+denominator cap `N`.  Since `canonicalOddDenominatorBlock` stores `Q - 1`, the
+filter is `q + 1 ≤ N`. -/
+def visibleCanonicalOddDenominatorBlock
+    (a : ℕ → ℕ) (N j : ℕ) : Finset ℕ :=
+  (canonicalOddDenominatorBlock a j).filter fun q => q + 1 ≤ N
+
+/-- The largest visible local canonical block below denominator cap `N`, with a
+logarithmic index cap. -/
+def visibleCanonicalBlockMax
+    (a : ℕ → ℕ) (N : ℕ) : ℕ :=
+  max 1 <| (Finset.range (2 * Nat.log 2 N + 3)).sup fun j =>
+    (visibleCanonicalOddDenominatorBlock a N j).card
+
+/-- Visible canonical block exponent, using the logarithmic visible block
+maximum rather than the older endpoint-counting `canonicalBlockGrowth`. -/
+noncomputable def visibleCanonicalBlockExponent (a : ℕ → ℕ) : ℝ :=
+  limsup
+    (fun N : ℕ =>
+      Real.log (visibleCanonicalBlockMax a N : ℝ) / Real.log (N : ℝ))
+    atTop
+
+/-- All visible canonical parity-selected denominator elements `Q - 1` below
+the true denominator cap `N`. -/
+def visibleCanonicalDenominatorSet
+    (a : ℕ → ℕ) (N : ℕ) : Finset ℕ :=
+  (Finset.range (2 * Nat.log 2 N + 3)).biUnion fun j =>
+    visibleCanonicalOddDenominatorBlock a N j
+
+noncomputable def visiblePopularDifferenceExponent (a : ℕ → ℕ) : ℝ :=
+  limsup
+    (fun N : ℕ =>
+      Real.log
+        (popularDifferenceUpTo (visibleCanonicalDenominatorSet a N) N : ℝ) /
+        Real.log (N : ℝ))
+    atTop
+
+noncomputable def visibleAdditiveEnergyExponent (a : ℕ → ℕ) : ℝ :=
+  limsup
+    (fun N : ℕ =>
+      Real.log
+        (additiveEnergy (visibleCanonicalDenominatorSet a N) : ℝ) /
+        Real.log (N : ℝ))
+    atTop
+
+noncomputable def properHilbertCubeDimension (S : Finset ℕ) : ℕ :=
+  by
+    classical
+    exact (Finset.range (S.card + 1)).sup fun h : ℕ =>
+      if HasProperHilbertCube S h then h else 0
+
+noncomputable def visibleHilbertCubeExponent (a : ℕ → ℕ) : ℝ :=
+  limsup
+    (fun N : ℕ =>
+      (properHilbertCubeDimension
+        (visibleCanonicalDenominatorSet a N) : ℝ) /
+        Real.log (N : ℝ))
+    atTop
+
+noncomputable def visibleCanonicalLocalRatio
+    (a : ℕ → ℕ) (N j : ℕ) : ℝ :=
+  Real.log ((visibleCanonicalOddDenominatorBlock a N j).card : ℝ) /
+    Real.log (N : ℝ)
+
+lemma one_le_visibleCanonicalBlockMax (a : ℕ → ℕ) (N : ℕ) :
+    1 ≤ visibleCanonicalBlockMax a N := by
+  unfold visibleCanonicalBlockMax
+  exact le_max_left _ _
+
+lemma visibleCanonicalOddDenominatorBlock_card_le_safeBlockLength
+    {a : ℕ → ℕ} (N j : ℕ) :
+    (visibleCanonicalOddDenominatorBlock a N j).card
+      ≤ canonicalSafeBlockLength a j := by
+  calc
+    (visibleCanonicalOddDenominatorBlock a N j).card
+        ≤ (canonicalOddDenominatorBlock a j).card := by
+          unfold visibleCanonicalOddDenominatorBlock
+          exact Finset.card_filter_le _ _
+    _ ≤ canonicalBlockLength a j := by
+          unfold canonicalOddDenominatorBlock canonicalBlockLength
+          exact Finset.card_image_le
+    _ ≤ canonicalSafeBlockLength a j := by
+          unfold canonicalSafeBlockLength
+          exact le_max_right _ _
+
+lemma visibleCanonicalOddDenominatorBlock_card_mul_den_le
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1))
+    (N j : ℕ) :
+    (visibleCanonicalOddDenominatorBlock a N j).card *
+      continuantDen a j ≤ N := by
+  let qj : ℕ := continuantDen a j
+  let T : Finset ℕ :=
+    (canonicalOddBlock a j).filter fun t : ℕ =>
+      CFBlockDenominator a j t ≤ N
+  have hqpos : 0 < qj := by
+    dsimp [qj]
+    exact lt_of_lt_of_le Nat.zero_lt_one
+      (one_le_continuantDen_of_partials_pos_global a hpos j)
+  have hvisible_subset_image :
+      visibleCanonicalOddDenominatorBlock a N j ⊆
+        T.image (fun t : ℕ => CFBlockDenominator a j t - 1) := by
+    intro x hx
+    rw [visibleCanonicalOddDenominatorBlock, Finset.mem_filter] at hx
+    rcases hx with ⟨hxblock, hxN⟩
+    rw [canonicalOddDenominatorBlock] at hxblock
+    rcases Finset.mem_image.mp hxblock with ⟨t, ht, htx⟩
+    rw [Finset.mem_image]
+    refine ⟨t, ?_, htx⟩
+    dsimp [T]
+    rw [Finset.mem_filter]
+    refine ⟨ht, ?_⟩
+    have ht1 : 1 ≤ t := (mem_canonicalOddBlock_iff.mp ht).1
+    have hdenpos : 0 < CFBlockDenominator a j t := by
+      unfold CFBlockDenominator
+      dsimp [qj] at hqpos
+      exact Nat.add_pos_right _ (Nat.mul_pos ht1 hqpos)
+    have hxsucc :
+        x + 1 = CFBlockDenominator a j t := by
+      rw [← htx]
+      exact Nat.sub_add_cancel (Nat.succ_le_of_lt hdenpos)
+    exact hxsucc ▸ hxN
+  have hT_subset_Icc : T ⊆ Finset.Icc 1 (N / qj) := by
+    intro t ht
+    dsimp [T] at ht
+    rw [Finset.mem_filter] at ht
+    rcases ht with ⟨htblock, htN⟩
+    rw [Finset.mem_Icc]
+    have ht1 : 1 ≤ t := (mem_canonicalOddBlock_iff.mp htblock).1
+    have htmul : t * qj ≤ N := by
+      dsimp [qj]
+      unfold CFBlockDenominator at htN
+      exact (Nat.le_add_left (t * continuantDen a j) _).trans htN
+    exact ⟨ht1, (Nat.le_div_iff_mul_le hqpos).2 htmul⟩
+  have hcard_visible_le_T :
+      (visibleCanonicalOddDenominatorBlock a N j).card ≤ T.card := by
+    calc
+      (visibleCanonicalOddDenominatorBlock a N j).card
+          ≤ (T.image fun t : ℕ => CFBlockDenominator a j t - 1).card :=
+            Finset.card_le_card hvisible_subset_image
+      _ ≤ T.card := Finset.card_image_le
+  have hTcard_le : T.card ≤ N / qj := by
+    calc
+      T.card ≤ (Finset.Icc 1 (N / qj)).card := Finset.card_le_card hT_subset_Icc
+      _ = N / qj := by simp
+  have hcard_div :
+      (visibleCanonicalOddDenominatorBlock a N j).card ≤ N / qj :=
+    hcard_visible_le_T.trans hTcard_le
+  have hmul :
+      (visibleCanonicalOddDenominatorBlock a N j).card * qj ≤
+        (N / qj) * qj :=
+    Nat.mul_le_mul_right qj hcard_div
+  exact hmul.trans (Nat.div_mul_le_self N qj)
+
+lemma continuantDen_le_succ_of_mem_canonicalOddDenominatorBlock
+    {a : ℕ → ℕ} {j q : ℕ}
+    (hq : q ∈ canonicalOddDenominatorBlock a j) :
+    continuantDen a j ≤ q + 1 := by
+  rw [canonicalOddDenominatorBlock] at hq
+  rcases Finset.mem_image.mp hq with ⟨t, ht, htq⟩
+  have ht1 : 1 ≤ t := (mem_canonicalOddBlock_iff.mp ht).1
+  have hden_le_block :
+      continuantDen a j ≤ CFBlockDenominator a j t := by
+    unfold CFBlockDenominator
+    have hle_mul : continuantDen a j ≤ t * continuantDen a j :=
+      Nat.le_mul_of_pos_left (continuantDen a j) ht1
+    exact hle_mul.trans (Nat.le_add_left _ _)
+  have hblock_le_qsucc : CFBlockDenominator a j t ≤ q + 1 := by
+    omega
+  exact hden_le_block.trans hblock_le_qsucc
+
+lemma canonicalOddDenominatorBlock_succ_le_endpoint
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1))
+    {j q : ℕ}
+    (hq : q ∈ canonicalOddDenominatorBlock a j) :
+    q + 1 ≤ continuantDen a (j + 1) := by
+  rw [canonicalOddDenominatorBlock] at hq
+  rcases Finset.mem_image.mp hq with ⟨t, ht, htq⟩
+  have hsel := mem_canonicalOddBlock_iff.mp ht
+  have hqpos : 0 < continuantDen a j :=
+    lt_of_lt_of_le Nat.zero_lt_one
+      (one_le_continuantDen_of_partials_pos_global a hpos j)
+  have hblockpos : 0 < CFBlockDenominator a j t := by
+    unfold CFBlockDenominator
+    exact Nat.add_pos_right _ (Nat.mul_pos hsel.1 hqpos)
+  have hqsucc_eq :
+      q + 1 = CFBlockDenominator a j t := by
+    rw [← htq]
+    exact Nat.sub_add_cancel (Nat.succ_le_of_lt hblockpos)
+  rw [hqsucc_eq]
+  rw [← CFBlockDenominator_endpoint a j]
+  unfold CFBlockDenominator
+  exact Nat.add_le_add_left
+    (Nat.mul_le_mul_right (continuantDen a j) hsel.2.1)
+    (continuantDenPrev a j)
+
+lemma canonicalOddDenominatorBlock_le_endpoint
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1))
+    {j q : ℕ}
+    (hq : q ∈ canonicalOddDenominatorBlock a j) :
+    q ≤ continuantDen a (j + 1) := by
+  exact (Nat.le_succ q).trans
+    (canonicalOddDenominatorBlock_succ_le_endpoint hpos hq)
+
+lemma index_lt_log_bound_of_mem_visibleCanonicalBlock
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1))
+    {N j q : ℕ}
+    (hqmem : q ∈ canonicalOddDenominatorBlock a j)
+    (hqN : q + 1 ≤ N) :
+    j < 2 * Nat.log 2 N + 3 := by
+  have hqj_le_qsucc :
+      continuantDen a j ≤ q + 1 :=
+    continuantDen_le_succ_of_mem_canonicalOddDenominatorBlock hqmem
+  have hqj_le_N : continuantDen a j ≤ N :=
+    hqj_le_qsucc.trans hqN
+  have hpow : 2 ^ (j / 2) ≤ continuantDen a j :=
+    pow_two_half_le_continuantDen_of_partials_pos a hpos j
+  have hpowN : 2 ^ (j / 2) ≤ N :=
+    hpow.trans hqj_le_N
+  have hlog : j / 2 ≤ Nat.log 2 N :=
+    Nat.le_log_of_pow_le (by decide : 1 < 2) hpowN
+  omega
+
+lemma mem_visibleCanonicalDenominatorSet_of_mem_block_le
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1))
+    {N j q : ℕ}
+    (hqmem : q ∈ canonicalOddDenominatorBlock a j)
+    (hqN : q + 1 ≤ N) :
+    q ∈ visibleCanonicalDenominatorSet a N := by
+  have hj :
+      j ∈ Finset.range (2 * Nat.log 2 N + 3) := by
+    exact Finset.mem_range.mpr
+      (index_lt_log_bound_of_mem_visibleCanonicalBlock hpos hqmem hqN)
+  exact Finset.mem_biUnion.mpr ⟨j, hj, by
+    rw [visibleCanonicalOddDenominatorBlock, Finset.mem_filter]
+    exact ⟨hqmem, hqN⟩⟩
+
+lemma mem_visibleCanonicalDenominatorSet_le
+    {a : ℕ → ℕ} {N x : ℕ}
+    (hx : x ∈ visibleCanonicalDenominatorSet a N) :
+    x ≤ N := by
+  rw [visibleCanonicalDenominatorSet] at hx
+  rcases Finset.mem_biUnion.mp hx with ⟨j, _hj, hxj⟩
+  rw [visibleCanonicalOddDenominatorBlock, Finset.mem_filter] at hxj
+  omega
+
+theorem visibleCanonical_additive_upper_bridge
+    {a : ℕ → ℕ}
+    (_hpos : ∀ n : ℕ, 0 < a (n + 1))
+    (N : ℕ) :
+    popularDifferenceUpTo (visibleCanonicalDenominatorSet a N) N
+      ≤ (2 * Nat.log 2 N + 3) * visibleCanonicalBlockMax a N + 1 ∧
+    additiveEnergy (visibleCanonicalDenominatorSet a N)
+      ≤ ((2 * Nat.log 2 N + 3) * visibleCanonicalBlockMax a N) ^ 3 ∧
+    ∀ h : ℕ,
+      HasProperHilbertCube (visibleCanonicalDenominatorSet a N) h →
+        2 ^ h ≤ (2 * Nat.log 2 N + 3) * visibleCanonicalBlockMax a N := by
+  let I : Finset ℕ := Finset.range (2 * Nat.log 2 N + 3)
+  let B : ℕ → Finset ℕ := fun j =>
+    visibleCanonicalOddDenominatorBlock a N j
+  let S : Finset ℕ := visibleCanonicalDenominatorSet a N
+  let M : ℕ := visibleCanonicalBlockMax a N
+  have hcover : S ⊆ I.biUnion B := by
+    intro x hx
+    simpa [S, visibleCanonicalDenominatorSet, I, B] using hx
+  have hBcard : ∀ i ∈ I, (B i).card ≤ M := by
+    intro i hi
+    dsimp [B, M, visibleCanonicalBlockMax]
+    exact (Finset.le_sup
+      (s := Finset.range (2 * Nat.log 2 N + 3))
+      (f := fun j => (visibleCanonicalOddDenominatorBlock a N j).card)
+      hi).trans (le_max_right _ _)
+  constructor
+  · have hpop := popularDifferenceUpTo_le_of_block_cover
+      (I := I) (B := B) (S := S) (N := N) (M := M) hcover hBcard
+    simpa [I, S, M] using hpop
+  constructor
+  · have henergy := additiveEnergy_le_of_block_cover
+      (I := I) (B := B) (S := S) (M := M) hcover hBcard
+    simpa [I, S, M] using henergy
+  · intro h hcube
+    have hcube_bound := two_pow_le_of_hasProperHilbertCube_of_block_cover
+      (I := I) (B := B) (S := S) (M := M) hcover hBcard hcube
+    simpa [I, S, M] using hcube_bound
+
+lemma canonicalOddDenominatorBlock_subset_visibleSet_of_endpoint_le
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1))
+    {N j : ℕ}
+    (hjN : continuantDen a (j + 1) ≤ N) :
+    canonicalOddDenominatorBlock a j ⊆ visibleCanonicalDenominatorSet a N := by
+  intro q hq
+  have hqN : q + 1 ≤ N :=
+    (canonicalOddDenominatorBlock_succ_le_endpoint hpos hq).trans hjN
+  exact mem_visibleCanonicalDenominatorSet_of_mem_block_le
+    hpos hq hqN
+
+lemma canonicalBlockLength_le_visibleCanonicalBlockMax_of_endpoint_le
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1))
+    {N j : ℕ}
+    (hjN : continuantDen a (j + 1) ≤ N) :
+    canonicalBlockLength a j ≤ visibleCanonicalBlockMax a N := by
+  have hqj_le_N : continuantDen a j ≤ N :=
+    (continuantDen_mono_of_partials_pos a hpos j).trans hjN
+  have hpowN : 2 ^ (j / 2) ≤ N :=
+    (pow_two_half_le_continuantDen_of_partials_pos a hpos j).trans hqj_le_N
+  have hlog : j / 2 ≤ Nat.log 2 N :=
+    Nat.le_log_of_pow_le Nat.one_lt_two hpowN
+  have hjmem : j ∈ Finset.range (2 * Nat.log 2 N + 3) := by
+    exact Finset.mem_range.mpr (by omega)
+  have hblock_subset :
+      canonicalOddDenominatorBlock a j ⊆
+        visibleCanonicalOddDenominatorBlock a N j := by
+    intro q hq
+    rw [visibleCanonicalOddDenominatorBlock, Finset.mem_filter]
+    exact ⟨hq, (canonicalOddDenominatorBlock_succ_le_endpoint hpos hq).trans hjN⟩
+  have hcard :
+      canonicalBlockLength a j ≤
+        (visibleCanonicalOddDenominatorBlock a N j).card := by
+    rw [← canonicalOddDenominatorBlock_card a hpos j]
+    exact Finset.card_le_card hblock_subset
+  have hvisible_le_max :
+      (visibleCanonicalOddDenominatorBlock a N j).card ≤
+        visibleCanonicalBlockMax a N := by
+    unfold visibleCanonicalBlockMax
+    exact (Finset.le_sup
+      (s := Finset.range (2 * Nat.log 2 N + 3))
+      (f := fun j => (visibleCanonicalOddDenominatorBlock a N j).card)
+      hjmem).trans (le_max_right _ _)
+  exact hcard.trans hvisible_le_max
+
+lemma canonicalBlockGrowth_le_visibleCanonicalBlockMax
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1))
+    (N : ℕ) :
+    canonicalBlockGrowth a N ≤ visibleCanonicalBlockMax a N := by
+  unfold canonicalBlockGrowth
+  apply max_le
+  · exact one_le_visibleCanonicalBlockMax a N
+  · apply Finset.sup_le
+    intro j _hj
+    by_cases hden : continuantDen a (j + 1) ≤ N
+    · simp [hden]
+      exact canonicalBlockLength_le_visibleCanonicalBlockMax_of_endpoint_le
+        hpos hden
+    · simp [hden]
+
+lemma visibleCanonicalOddDenominatorBlock_card_le_cap
+    (a : ℕ → ℕ) (N j : ℕ) :
+    (visibleCanonicalOddDenominatorBlock a N j).card ≤ N := by
+  have hsub : visibleCanonicalOddDenominatorBlock a N j ⊆ Finset.range N := by
+    intro q hq
+    rw [visibleCanonicalOddDenominatorBlock, Finset.mem_filter] at hq
+    exact Finset.mem_range.mpr (by omega)
+  calc
+    (visibleCanonicalOddDenominatorBlock a N j).card ≤ (Finset.range N).card :=
+      Finset.card_le_card hsub
+    _ = N := by simp
+
+lemma visibleCanonicalBlockMax_le_self_of_one_le
+    (a : ℕ → ℕ) {N : ℕ}
+    (hN : 1 ≤ N) :
+    visibleCanonicalBlockMax a N ≤ N := by
+  unfold visibleCanonicalBlockMax
+  apply max_le hN
+  apply Finset.sup_le
+  intro j _hj
+  exact visibleCanonicalOddDenominatorBlock_card_le_cap a N j
+
+lemma visibleCanonicalBlockMax_ratio_nonneg_eventually
+    (a : ℕ → ℕ) :
+    ∀ᶠ N : ℕ in atTop,
+      0 ≤
+        Real.log (visibleCanonicalBlockMax a N : ℝ) / Real.log (N : ℝ) := by
+  refine (eventually_ge_atTop 1).mono ?_
+  intro N hN
+  have hlogR_nonneg :
+      0 ≤ Real.log (visibleCanonicalBlockMax a N : ℝ) :=
+    Real.log_nonneg (by exact_mod_cast one_le_visibleCanonicalBlockMax a N)
+  have hlogN_nonneg : 0 ≤ Real.log (N : ℝ) :=
+    Real.log_nonneg (by exact_mod_cast hN)
+  exact div_nonneg hlogR_nonneg hlogN_nonneg
+
+lemma visibleCanonicalBlockMax_ratio_le_one_eventually
+    (a : ℕ → ℕ) :
+    ∀ᶠ N : ℕ in atTop,
+      Real.log (visibleCanonicalBlockMax a N : ℝ) / Real.log (N : ℝ) ≤ 1 := by
+  refine (eventually_ge_atTop 2).mono ?_
+  intro N hN
+  let R : ℝ := visibleCanonicalBlockMax a N
+  let X : ℝ := N
+  have hRpos : 0 < R := by
+    dsimp [R]
+    exact_mod_cast
+      (lt_of_lt_of_le Nat.zero_lt_one (one_le_visibleCanonicalBlockMax a N))
+  have hRX : R ≤ X := by
+    dsimp [R, X]
+    exact_mod_cast
+      visibleCanonicalBlockMax_le_self_of_one_le a (by omega : 1 ≤ N)
+  have hlogRX : Real.log R ≤ Real.log X :=
+    Real.log_le_log hRpos hRX
+  have hlogXpos : 0 < Real.log X := by
+    dsimp [X]
+    exact Real.log_pos (by exact_mod_cast hN)
+  have hdiv : Real.log R / Real.log X ≤ Real.log X / Real.log X :=
+    div_le_div_of_nonneg_right hlogRX hlogXpos.le
+  have hright : Real.log X / Real.log X = 1 := div_self hlogXpos.ne'
+  simpa [R, X, hright] using hdiv
+
+lemma canonicalBlockExponent_le_visibleCanonicalBlockExponent
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1)) :
+    canonicalBlockExponent a ≤ visibleCanonicalBlockExponent a := by
+  let F : ℕ → ℝ := fun N =>
+    Real.log (canonicalBlockGrowth a N : ℝ) / Real.log (N : ℝ)
+  let G : ℕ → ℝ := fun N =>
+    Real.log (visibleCanonicalBlockMax a N : ℝ) / Real.log (N : ℝ)
+  have hFG : F ≤ᶠ[atTop] G := by
+    filter_upwards [eventually_ge_atTop 2] with N hN
+    let R : ℝ := canonicalBlockGrowth a N
+    let V : ℝ := visibleCanonicalBlockMax a N
+    let X : ℝ := N
+    have hRpos : 0 < R := by
+      dsimp [R]
+      exact_mod_cast
+        (lt_of_lt_of_le Nat.zero_lt_one (by
+          unfold canonicalBlockGrowth
+          exact le_max_left _ _))
+    have hRV : R ≤ V := by
+      dsimp [R, V]
+      exact_mod_cast canonicalBlockGrowth_le_visibleCanonicalBlockMax hpos N
+    have hlogRV : Real.log R ≤ Real.log V :=
+      Real.log_le_log hRpos hRV
+    have hlogXpos : 0 < Real.log X := by
+      dsimp [X]
+      exact Real.log_pos (by exact_mod_cast hN)
+    have hdiv : Real.log R / Real.log X ≤ Real.log V / Real.log X :=
+      div_le_div_of_nonneg_right hlogRV hlogXpos.le
+    simpa [F, G, R, V, X] using hdiv
+  have hFnonneg : ∀ᶠ N : ℕ in atTop, 0 ≤ F N := by
+    refine (eventually_ge_atTop 1).mono ?_
+    intro N hN
+    have hlogR_nonneg :
+        0 ≤ Real.log (canonicalBlockGrowth a N : ℝ) :=
+      Real.log_nonneg (by
+        exact_mod_cast (by
+          unfold canonicalBlockGrowth
+          exact le_max_left _ _))
+    have hlogN_nonneg : 0 ≤ Real.log (N : ℝ) :=
+      Real.log_nonneg (by exact_mod_cast hN)
+    exact div_nonneg hlogR_nonneg hlogN_nonneg
+  have hFcobdd :
+      Filter.IsCoboundedUnder (fun x y : ℝ => x ≤ y) atTop F :=
+    Filter.IsCoboundedUnder.of_frequently_ge hFnonneg.frequently
+  have hGbdd :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop G :=
+    Filter.isBoundedUnder_of_eventually_le
+      (by
+        filter_upwards [visibleCanonicalBlockMax_ratio_le_one_eventually a]
+          with N hN
+        simpa [G] using hN)
+  have hlim := Filter.limsup_le_limsup hFG hFcobdd hGbdd
+  simpa [canonicalBlockExponent, visibleCanonicalBlockExponent, F, G] using hlim
+
+theorem fullCanonicalBlock_additive_lower_bridge
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1))
+    {N j : ℕ}
+    (hjN : continuantDen a (j + 1) ≤ N) :
+    canonicalBlockLength a j
+      ≤ popularDifferenceUpTo (visibleCanonicalDenominatorSet a N) N ∧
+    (canonicalBlockLength a j) ^ 3
+      ≤ 2 * additiveEnergy (visibleCanonicalDenominatorSet a N) ∧
+    ∀ h : ℕ,
+      2 ^ h ≤ canonicalBlockLength a j →
+        HasProperHilbertCube (visibleCanonicalDenominatorSet a N) h := by
+  obtain ⟨s, d, m, hd, hm, hblock⟩ :=
+    exists_finiteArithmeticBlock_subset_canonicalOddDenominatorBlock
+      (a := a) (j := j) hpos
+  subst m
+  have hcanon_subset :
+      canonicalOddDenominatorBlock a j ⊆ visibleCanonicalDenominatorSet a N :=
+    canonicalOddDenominatorBlock_subset_visibleSet_of_endpoint_le hpos hjN
+  have hblock_visible :
+      finiteArithmeticBlock s d (canonicalBlockLength a j)
+        ⊆ visibleCanonicalDenominatorSet a N :=
+    hblock.trans hcanon_subset
+  constructor
+  · by_cases hm2 : 2 ≤ canonicalBlockLength a j
+    · have hdleN : d ≤ N :=
+        block_step_le_of_two_le_length_subset_Iic
+          (S := visibleCanonicalDenominatorSet a N)
+          (s := s) (d := d) (m := canonicalBlockLength a j)
+          (N := N) hm2 hblock_visible
+          (fun x hx => mem_visibleCanonicalDenominatorSet_le hx)
+      exact popularDifferenceUpTo_ge_of_block_subset
+        (S := visibleCanonicalDenominatorSet a N)
+        (N := N)
+        ⟨Nat.succ_le_of_lt hd, hdleN⟩ hblock_visible
+    · have hle1 : canonicalBlockLength a j ≤ 1 := by omega
+      exact hle1.trans
+        (one_le_popularDifferenceUpTo
+          (visibleCanonicalDenominatorSet a N) N)
+  constructor
+  · exact additiveEnergy_ge_of_arithmeticBlock_subset
+      (S := visibleCanonicalDenominatorSet a N)
+      hd hblock_visible
+  · intro h hh
+    exact hasProperHilbertCube_of_two_pow_le_block_length
+      (S := visibleCanonicalDenominatorSet a N)
+      hd hh hblock_visible
+
 lemma canonicalOddCFGap_same_block
     (a : ℕ → ℕ) {j t s : ℕ} (hts : t ≤ s) :
     CanonicalOddCFGap a j t j s =
@@ -1675,6 +2475,253 @@ lemma canonicalSafeBlockLength_bounds_real
   ⟨partialQuotient_div_three_le_safeBlockLength_real a j,
     canonicalSafeBlockLength_le_partialQuotient_real a hpos⟩
 
+lemma continuantDen_succ_le_six_safe_mul_den_real
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1))
+    (j : ℕ) :
+    (continuantDen a (j + 1) : ℝ)
+      ≤ 6 * (canonicalSafeBlockLength a j : ℝ) *
+          (continuantDen a j : ℝ) := by
+  have hQ :
+      (continuantDen a (j + 1) : ℝ)
+        ≤ 2 * (a (j + 1) : ℝ) * (continuantDen a j : ℝ) := by
+    exact_mod_cast (continuantDen_succ_mul_bounds hpos j).2
+  have ha :
+      (a (j + 1) : ℝ) ≤ 3 * (canonicalSafeBlockLength a j : ℝ) := by
+    have h := partialQuotient_div_three_le_safeBlockLength_real a j
+    nlinarith
+  have hqnonneg : 0 ≤ (continuantDen a j : ℝ) := by positivity
+  nlinarith
+
+lemma two_le_continuantDen_succ_of_two_le_visibleCanonicalOddDenominatorBlock_card
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1))
+    {N j : ℕ}
+    (hv2 : 2 ≤ (visibleCanonicalOddDenominatorBlock a N j).card) :
+    2 ≤ continuantDen a (j + 1) := by
+  have hvM :
+      (visibleCanonicalOddDenominatorBlock a N j).card ≤
+        canonicalSafeBlockLength a j :=
+    visibleCanonicalOddDenominatorBlock_card_le_safeBlockLength
+      (a := a) N j
+  have hMa :
+      canonicalSafeBlockLength a j ≤ a (j + 1) :=
+    canonicalSafeBlockLength_le_partialQuotient a (hpos j)
+  have haQ :
+      a (j + 1) ≤ continuantDen a (j + 1) :=
+    partialQuotient_le_continuantDen_succ a hpos j
+  exact hv2.trans (hvM.trans (hMa.trans haQ))
+
+lemma log_ratio_le_log_ratio_add_const_of_mul_le
+    {v M Q N K : ℝ}
+    (hK : 1 ≤ K)
+    (hv2 : 2 ≤ v)
+    (hN2 : 2 ≤ N)
+    (hQ2 : 2 ≤ Q)
+    (hvM : v ≤ M)
+    (hvN : v ≤ N)
+    (hmul : v * Q ≤ K * M * N) :
+    Real.log v / Real.log N
+      ≤ Real.log M / Real.log Q + Real.log K / Real.log N := by
+  let A : ℝ := Real.log v
+  let B : ℝ := Real.log M
+  let C : ℝ := Real.log Q
+  let L : ℝ := Real.log N
+  let k : ℝ := Real.log K
+  have hvpos : 0 < v := by linarith
+  have hMpos : 0 < M := by linarith
+  have hQpos : 0 < Q := by linarith
+  have hNpos : 0 < N := by linarith
+  have hKpos : 0 < K := by linarith
+  have hLpos : 0 < L := by
+    dsimp [L]
+    exact Real.log_pos (by linarith)
+  have hCpos : 0 < C := by
+    dsimp [C]
+    exact Real.log_pos (by linarith)
+  have hAnonneg : 0 ≤ A := by
+    dsimp [A]
+    exact Real.log_nonneg (by linarith)
+  have hk_nonneg : 0 ≤ k := by
+    dsimp [k]
+    exact Real.log_nonneg hK
+  have hAleB : A ≤ B := by
+    dsimp [A, B]
+    exact Real.log_le_log hvpos hvM
+  have hAleL : A ≤ L := by
+    dsimp [A, L]
+    exact Real.log_le_log hvpos hvN
+  have hleftpos : 0 < v * Q := mul_pos hvpos hQpos
+  have hlogmul0 :
+      Real.log (v * Q) ≤ Real.log (K * M * N) :=
+    Real.log_le_log hleftpos hmul
+  have hlogmul : A + C ≤ k + B + L := by
+    dsimp [A, B, C, L, k]
+    rw [Real.log_mul hvpos.ne' hQpos.ne'] at hlogmul0
+    rw [Real.log_mul (mul_pos hKpos hMpos).ne' hNpos.ne',
+      Real.log_mul hKpos.ne' hMpos.ne'] at hlogmul0
+    linarith
+  change A / L ≤ B / C + k / L
+  by_cases hQN : Q ≤ N
+  · have hCleL : C ≤ L := by
+      dsimp [C, L]
+      exact Real.log_le_log hQpos hQN
+    have hACleAL : A * C ≤ A * L :=
+      mul_le_mul_of_nonneg_left hCleL hAnonneg
+    have hALleBL : A * L ≤ B * L :=
+      mul_le_mul_of_nonneg_right hAleB hLpos.le
+    have hmain : A / L ≤ B / C := by
+      rw [div_le_div_iff₀ hLpos hCpos]
+      exact hACleAL.trans hALleBL
+    have hkdiv_nonneg : 0 ≤ k / L := div_nonneg hk_nonneg hLpos.le
+    linarith
+  · have hNQ : N < Q := lt_of_not_ge hQN
+    have hLltC : L < C := by
+      dsimp [L, C]
+      exact Real.log_lt_log hNpos hNQ
+    have hLleC : L ≤ C := le_of_lt hLltC
+    have hEta_nonneg : 0 ≤ C - L := by linarith
+    have hEta_le : C - L ≤ B - A + k := by linarith
+    have hDeltak_nonneg : 0 ≤ B - A + k := by linarith
+    have hAeta_le_Leta :
+        A * (C - L) ≤ L * (C - L) :=
+      mul_le_mul_of_nonneg_right hAleL hEta_nonneg
+    have hLeta_le_Ldeltak :
+        L * (C - L) ≤ L * (B - A + k) :=
+      mul_le_mul_of_nonneg_left hEta_le hLpos.le
+    have hAeta_le_Ldeltak :
+        A * (C - L) ≤ L * (B - A + k) :=
+      hAeta_le_Leta.trans hLeta_le_Ldeltak
+    have hkLleC : k * L ≤ k * C :=
+      mul_le_mul_of_nonneg_left hLleC hk_nonneg
+    have hmain : A * C ≤ B * L + k * C := by
+      nlinarith
+    calc
+      A / L = (A * C) / (L * C) := by
+        field_simp [hLpos.ne', hCpos.ne']
+      _ ≤ (B * L + k * C) / (L * C) := by
+        exact div_le_div_of_nonneg_right hmain
+          (mul_nonneg hLpos.le hCpos.le)
+      _ = B / C + k / L := by
+        field_simp [hLpos.ne', hCpos.ne']
+
+lemma visibleBlock_card_log_ratio_le_endpoint_safe_ratio_add_error
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1))
+    {N j : ℕ}
+    (hN : 2 ≤ N)
+    (hv2 : 2 ≤ (visibleCanonicalOddDenominatorBlock a N j).card) :
+    Real.log ((visibleCanonicalOddDenominatorBlock a N j).card : ℝ) /
+        Real.log (N : ℝ)
+      ≤
+    Real.log (canonicalSafeBlockLength a j : ℝ) /
+        Real.log (continuantDen a (j + 1) : ℝ)
+      + Real.log 6 / Real.log (N : ℝ) := by
+  let v : ℝ := (visibleCanonicalOddDenominatorBlock a N j).card
+  let M : ℝ := canonicalSafeBlockLength a j
+  let Q : ℝ := continuantDen a (j + 1)
+  let X : ℝ := N
+  have hv2real : 2 ≤ v := by
+    dsimp [v]
+    exact_mod_cast hv2
+  have hX2 : 2 ≤ X := by
+    dsimp [X]
+    exact_mod_cast hN
+  have hQ2nat :
+      2 ≤ continuantDen a (j + 1) :=
+    two_le_continuantDen_succ_of_two_le_visibleCanonicalOddDenominatorBlock_card
+      hpos hv2
+  have hQ2real : 2 ≤ Q := by
+    dsimp [Q]
+    exact_mod_cast hQ2nat
+  have hvM : v ≤ M := by
+    dsimp [v, M]
+    exact_mod_cast
+      visibleCanonicalOddDenominatorBlock_card_le_safeBlockLength
+        (a := a) N j
+  have hvX : v ≤ X := by
+    dsimp [v, X]
+    exact_mod_cast visibleCanonicalOddDenominatorBlock_card_le_cap a N j
+  have hvq :
+      v * (continuantDen a j : ℝ) ≤ (N : ℝ) := by
+    dsimp [v]
+    exact_mod_cast
+      visibleCanonicalOddDenominatorBlock_card_mul_den_le
+        (a := a) hpos N j
+  have hQle :
+      Q ≤ 6 * M * (continuantDen a j : ℝ) := by
+    dsimp [Q, M]
+    exact continuantDen_succ_le_six_safe_mul_den_real hpos j
+  have hmul : v * Q ≤ 6 * M * X := by
+    have h1 : v * Q ≤ v * (6 * M * (continuantDen a j : ℝ)) :=
+      mul_le_mul_of_nonneg_left hQle (by positivity)
+    have h2 :
+        (6 * M) * (v * (continuantDen a j : ℝ)) ≤
+          (6 * M) * (N : ℝ) :=
+      mul_le_mul_of_nonneg_left hvq (by positivity)
+    dsimp [X]
+    nlinarith
+  have hmain :=
+    log_ratio_le_log_ratio_add_const_of_mul_le
+      (v := v) (M := M) (Q := Q) (N := X) (K := 6)
+      (by norm_num) hv2real hX2 hQ2real hvM hvX hmul
+  simpa [v, M, Q, X] using hmain
+
+lemma visibleCanonicalBlockMax_ratio_le_of_all_blocks
+    {a : ℕ → ℕ} {N : ℕ} {C : ℝ}
+    (hN : 1 < N)
+    (hCnonneg : 0 ≤ C)
+    (hblock :
+      ∀ j ∈ Finset.range (2 * Nat.log 2 N + 3),
+        Real.log ((visibleCanonicalOddDenominatorBlock a N j).card : ℝ) /
+            Real.log (N : ℝ) ≤ C) :
+    Real.log (visibleCanonicalBlockMax a N : ℝ) /
+        Real.log (N : ℝ) ≤ C := by
+  have hlogNpos : 0 < Real.log (N : ℝ) :=
+    Real.log_pos (by exact_mod_cast hN)
+  by_cases hRone : visibleCanonicalBlockMax a N = 1
+  · have hlogR : Real.log (visibleCanonicalBlockMax a N : ℝ) = 0 := by
+      rw [hRone]
+      norm_num
+    simp [hlogR, hCnonneg]
+  · let s : Finset ℕ := Finset.range (2 * Nat.log 2 N + 3)
+    let f : ℕ → ℕ := fun j : ℕ =>
+      (visibleCanonicalOddDenominatorBlock a N j).card
+    have hsne : s.Nonempty := by
+      refine ⟨0, ?_⟩
+      simp [s]
+    rcases Finset.exists_mem_eq_sup s hsne f with ⟨j, hjmem, hsup⟩
+    have hRle : visibleCanonicalBlockMax a N ≤ f j := by
+      unfold visibleCanonicalBlockMax
+      change max 1 (s.sup f) ≤ f j
+      rw [hsup]
+      apply max_le
+      · by_contra hlt
+        have hfj0 : f j = 0 := by omega
+        have hRone' : max 1 (f j) = 1 := by simp [hfj0]
+        exact hRone (by
+          unfold visibleCanonicalBlockMax
+          change max 1 (s.sup f) = 1
+          simpa [hsup] using hRone')
+      · rfl
+    let R : ℝ := visibleCanonicalBlockMax a N
+    let V : ℝ := f j
+    have hRpos : 0 < R := by
+      dsimp [R]
+      exact_mod_cast
+        (lt_of_lt_of_le Nat.zero_lt_one
+          (one_le_visibleCanonicalBlockMax a N))
+    have hRV : R ≤ V := by
+      dsimp [R, V]
+      exact_mod_cast hRle
+    have hlogRV : Real.log R ≤ Real.log V :=
+      Real.log_le_log hRpos hRV
+    have hdiv :
+        Real.log R / Real.log (N : ℝ) ≤
+          Real.log V / Real.log (N : ℝ) :=
+      div_le_div_of_nonneg_right hlogRV hlogNpos.le
+    exact hdiv.trans (by simpa [s, f, V] using hblock j hjmem)
+
 lemma one_le_finiteSafeBlockMax (a : ℕ → ℕ) (J : ℕ) :
     1 ≤ finiteSafeBlockMax a J := by
   unfold finiteSafeBlockMax
@@ -1782,6 +2829,61 @@ theorem blockDenominator_mem_oddCFDenoms_of_mem_canonicalOddBlock
     CFBlockDenominator a j t ∈ oddCFDenoms α := by
   exact oddCFDenoms_mem_of_oddCFPathPair hcf
     (oddCFPathPair_of_mem_canonicalOddBlock ht) hQ hred
+
+/-- Any chosen simple continued-fraction expansion describes `A α` as the set
+of odd-numerator principal/intermediate block denominators, shifted down by
+one. -/
+theorem A_eq_oddBlockASet_of_IsSimpleCFExpansion
+    {α : ℝ} {a : ℕ → ℕ}
+    (hαpos : 0 < α)
+    (hαirr : IsIrrational α)
+    (hcf : IsSimpleCFExpansion α a) :
+    A α = oddBlockASet a := by
+  rw [A_eq_odd_convergent_or_semiconvergent hαpos hαirr]
+  ext n
+  constructor
+  · rintro ⟨P, Q, hnQ, hQ2, hred, hconv, hodd⟩
+    rcases pair_path_of_convergent_or_semiconvergent_of_IsSimpleCFExpansion
+        hαpos hαirr hcf hQ2 hred hconv with
+      ⟨j, t, ht1, htle, hP, hQ⟩
+    refine ⟨j, t, ht1, htle, ?_, ?_, ?_⟩
+    · rw [hP] at hodd
+      simpa [CFBlockNumerator] using hodd
+    · rw [hQ] at hQ2
+      simpa [CFBlockDenominator] using hQ2
+    · rw [hQ] at hnQ
+      simpa [CFBlockDenominator] using hnQ
+  · rintro ⟨j, t, ht1, htle, hodd, hQ2, hnQ⟩
+    refine ⟨CFBlockNumerator a j t, CFBlockDenominator a j t,
+      hnQ, hQ2, ?_, ?_, hodd⟩
+    · simpa [CFBlockNumerator, CFBlockDenominator] using
+        reducedFraction_pathPair a (n := j) (t := t) ht1
+    · refine ⟨a, hcf, Or.inr ?_⟩
+      exact ⟨j, t, ht1, htle, rfl, rfl⟩
+
+/-- Every non-initial block denominator is at least `2`. -/
+lemma two_le_CFBlockDenominator_of_one_le_index
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1))
+    {j t : ℕ}
+    (hj : 1 ≤ j)
+    (ht : 1 ≤ t) :
+    2 ≤ CFBlockDenominator a j t := by
+  rcases Nat.exists_eq_succ_of_ne_zero (Nat.ne_of_gt hj) with ⟨k, rfl⟩
+  have hprev : 1 ≤ continuantDenPrev a (k + 1) := by
+    simpa [continuantDenPrev] using
+      one_le_continuantDen_of_partials_pos_global a hpos k
+  have hcurr : 1 ≤ t * continuantDen a (k + 1) := by
+    exact Nat.succ_le_of_lt <|
+      Nat.mul_pos
+        (lt_of_lt_of_le Nat.zero_lt_one ht)
+        (lt_of_lt_of_le Nat.zero_lt_one
+          (one_le_continuantDen_of_partials_pos_global a hpos (k + 1)))
+  have hsum :
+      1 + 1 ≤
+        continuantDenPrev a (k + 1) + t * continuantDen a (k + 1) :=
+    Nat.add_le_add hprev hcurr
+  simpa [CFBlockDenominator, Nat.succ_eq_add_one] using hsum
 
 lemma one_le_canonicalBlockGrowth (a : ℕ → ℕ) (N : ℕ) :
     1 ≤ canonicalBlockGrowth a N := by
@@ -2482,6 +3584,186 @@ theorem canonicalBlockExponent_eq_limsup_endpoint_safeBlock_ratio
     (canonicalBlockExponent_le_limsup_endpoint_safeBlock_ratio hpos)
     (limsup_endpoint_safeBlock_ratio_le_canonicalBlockExponent hpos)
 
+lemma eventually_visibleCanonicalBlockMax_ratio_le_of_limsup_endpoint_lt
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1))
+    {C₀ C : ℝ}
+    (hlim :
+      limsup
+          (fun j : ℕ =>
+            Real.log (canonicalSafeBlockLength a j : ℝ) /
+              Real.log (continuantDen a (j + 1) : ℝ))
+          atTop < C₀)
+    (hC₀C : C₀ < C) :
+    ∀ᶠ N : ℕ in atTop,
+      Real.log (visibleCanonicalBlockMax a N : ℝ) /
+          Real.log (N : ℝ) ≤ C := by
+  let G : ℕ → ℝ := fun j =>
+    Real.log (canonicalSafeBlockLength a j : ℝ) /
+      Real.log (continuantDen a (j + 1) : ℝ)
+  have hLnonneg : 0 ≤ limsup G atTop := by
+    simpa [G] using limsup_endpoint_safeBlock_ratio_nonneg hpos
+  have hC₀pos : 0 < C₀ := lt_of_le_of_lt hLnonneg (by simpa [G] using hlim)
+  have hCpos : 0 < C := lt_trans hC₀pos hC₀C
+  have hgap : 0 < C - C₀ := by linarith
+  have hGbdd : Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop G :=
+    Filter.isBoundedUnder_of_eventually_le
+      (by
+        filter_upwards [endpoint_safeBlock_ratio_le_one_eventually hpos]
+          with j hj
+        simpa [G] using hj)
+  have hGlt : ∀ᶠ j : ℕ in atTop, G j < C₀ :=
+    Filter.eventually_lt_of_limsup_lt (by simpa [G] using hlim) hGbdd
+  rcases eventually_atTop.1 hGlt with ⟨J, hJ⟩
+  let B : ℕ := finiteSafeBlockMax a J
+  have hsmall :
+      ∀ᶠ N : ℕ in atTop,
+        Real.log (B : ℝ) / Real.log (N : ℝ) < C := by
+    have hlimzero :
+        Tendsto
+          (fun N : ℕ => Real.log (B : ℝ) / Real.log (N : ℝ))
+          atTop (𝓝 0) :=
+      log_const_over_log_nat_tendsto_zero (Real.log (B : ℝ))
+    exact hlimzero.eventually (eventually_lt_nhds hCpos)
+  have herr :
+      ∀ᶠ N : ℕ in atTop,
+        Real.log 6 / Real.log (N : ℝ) < C - C₀ := by
+    have hlimzero :
+        Tendsto
+          (fun N : ℕ => Real.log 6 / Real.log (N : ℝ))
+          atTop (𝓝 0) :=
+      log_const_over_log_nat_tendsto_zero (Real.log 6)
+    exact hlimzero.eventually (eventually_lt_nhds hgap)
+  filter_upwards [hsmall, herr, eventually_ge_atTop 2] with N hsmallN herrN hN2
+  have hNgt1 : 1 < N := by omega
+  exact visibleCanonicalBlockMax_ratio_le_of_all_blocks
+    (a := a) hNgt1 hCpos.le (fun j hj => by
+      by_cases hjlt : j < J
+      · by_cases hcard0 :
+          (visibleCanonicalOddDenominatorBlock a N j).card = 0
+        · have hlog :
+              Real.log
+                ((visibleCanonicalOddDenominatorBlock a N j).card : ℝ) = 0 := by
+            rw [hcard0]
+            norm_num
+          simp [hlog, hCpos.le]
+        · have hcard_pos_nat :
+              0 < (visibleCanonicalOddDenominatorBlock a N j).card := by
+            omega
+          have hcard_pos :
+              0 < ((visibleCanonicalOddDenominatorBlock a N j).card : ℝ) := by
+            exact_mod_cast hcard_pos_nat
+          have hcardB :
+              ((visibleCanonicalOddDenominatorBlock a N j).card : ℝ) ≤
+                (B : ℝ) := by
+            dsimp [B]
+            exact_mod_cast
+              (visibleCanonicalOddDenominatorBlock_card_le_safeBlockLength
+                (a := a) N j).trans
+                (canonicalSafeBlockLength_le_finiteSafeBlockMax_of_lt a hjlt)
+          have hlog_le :
+              Real.log
+                  ((visibleCanonicalOddDenominatorBlock a N j).card : ℝ) ≤
+                Real.log (B : ℝ) :=
+            Real.log_le_log hcard_pos hcardB
+          have hlogNpos : 0 < Real.log (N : ℝ) :=
+            Real.log_pos (by exact_mod_cast hNgt1)
+          have hdiv :
+              Real.log
+                  ((visibleCanonicalOddDenominatorBlock a N j).card : ℝ) /
+                  Real.log (N : ℝ) ≤
+                Real.log (B : ℝ) / Real.log (N : ℝ) :=
+            div_le_div_of_nonneg_right hlog_le hlogNpos.le
+          exact hdiv.trans (le_of_lt hsmallN)
+      · have hjge : J ≤ j := le_of_not_gt hjlt
+        by_cases hv2 : 2 ≤ (visibleCanonicalOddDenominatorBlock a N j).card
+        · have hlocal :
+              Real.log
+                  ((visibleCanonicalOddDenominatorBlock a N j).card : ℝ) /
+                  Real.log (N : ℝ) ≤
+                Real.log (canonicalSafeBlockLength a j : ℝ) /
+                    Real.log (continuantDen a (j + 1) : ℝ) +
+                  Real.log 6 / Real.log (N : ℝ) :=
+            visibleBlock_card_log_ratio_le_endpoint_safe_ratio_add_error
+              (a := a) hpos hN2 hv2
+          have htail : G j < C₀ := hJ j hjge
+          have hsum :
+              Real.log (canonicalSafeBlockLength a j : ℝ) /
+                    Real.log (continuantDen a (j + 1) : ℝ) +
+                  Real.log 6 / Real.log (N : ℝ) ≤ C := by
+            nlinarith [htail, herrN]
+          exact hlocal.trans hsum
+        · have hcardle1 :
+              (visibleCanonicalOddDenominatorBlock a N j).card ≤ 1 := by
+            omega
+          have hcases :
+              (visibleCanonicalOddDenominatorBlock a N j).card = 0 ∨
+                (visibleCanonicalOddDenominatorBlock a N j).card = 1 := by
+            omega
+          rcases hcases with hzero | hone
+          · have hlog :
+                Real.log
+                  ((visibleCanonicalOddDenominatorBlock a N j).card : ℝ) = 0 := by
+              rw [hzero]
+              norm_num
+            simp [hlog, hCpos.le]
+          · have hlog :
+                Real.log
+                  ((visibleCanonicalOddDenominatorBlock a N j).card : ℝ) = 0 := by
+              rw [hone]
+              norm_num
+            simp [hlog, hCpos.le])
+
+theorem visibleCanonicalBlockExponent_le_canonicalBlockExponent
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1)) :
+    visibleCanonicalBlockExponent a ≤ canonicalBlockExponent a := by
+  let F : ℕ → ℝ := fun N =>
+    Real.log (visibleCanonicalBlockMax a N : ℝ) / Real.log (N : ℝ)
+  let G : ℕ → ℝ := fun j =>
+    Real.log (canonicalSafeBlockLength a j : ℝ) /
+      Real.log (continuantDen a (j + 1) : ℝ)
+  have hFcobdd :
+      Filter.IsCoboundedUnder (fun x y : ℝ => x ≤ y) atTop F :=
+    Filter.IsCoboundedUnder.of_frequently_ge
+      ((visibleCanonicalBlockMax_ratio_nonneg_eventually a).frequently.mono
+        (fun N hN => by simpa [F] using hN))
+  have hFbdd :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop F :=
+    Filter.isBoundedUnder_of_eventually_le
+      (by
+        filter_upwards [visibleCanonicalBlockMax_ratio_le_one_eventually a]
+          with N hN
+        simpa [F] using hN)
+  rw [canonicalBlockExponent_eq_limsup_endpoint_safeBlock_ratio
+    (a := a) hpos]
+  have hmain : limsup F atTop ≤ limsup G atTop := by
+    rw [Filter.limsup_le_iff' hFcobdd hFbdd]
+    intro C hC
+    let L : ℝ := limsup G atTop
+    let C₀ : ℝ := (L + C) / 2
+    have hLC₀ : L < C₀ := by
+      dsimp [C₀, L]
+      linarith
+    have hC₀C : C₀ < C := by
+      dsimp [C₀, L]
+      linarith
+    filter_upwards
+      [eventually_visibleCanonicalBlockMax_ratio_le_of_limsup_endpoint_lt
+        (a := a) hpos (C₀ := C₀) (C := C)
+        (by simpa [G, L, C₀] using hLC₀) hC₀C]
+      with N hN
+    simpa [F] using hN
+  simpa [visibleCanonicalBlockExponent, F, G] using hmain
+
+theorem visibleCanonicalBlockExponent_eq_canonicalBlockExponent
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1)) :
+    visibleCanonicalBlockExponent a = canonicalBlockExponent a :=
+  le_antisymm
+    (visibleCanonicalBlockExponent_le_canonicalBlockExponent hpos)
+    (canonicalBlockExponent_le_visibleCanonicalBlockExponent hpos)
+
 lemma limsup_eq_of_sub_tendsto_zero_of_eventually_bounded
     {u v : ℕ → ℝ}
     (hsub : Tendsto (fun n : ℕ => u n - v n) atTop (𝓝 0))
@@ -2736,6 +4018,1257 @@ private lemma tendsto_euler_block_log_bound :
         atTop (𝓝 0) := by
     exact tendsto_log_affine_div_self_atTop (by positivity)
   exact hanalytic.comp (Real.tendsto_log_atTop.comp tendsto_natCast_atTop_atTop)
+
+private lemma log_two_mul_natLog_add_const_div_log_tendsto_zero
+    {c : ℕ} (hcpos : 1 ≤ c) (hc : c ≤ 6) :
+    Tendsto
+      (fun N : ℕ =>
+        Real.log ((2 * Nat.log 2 N + c : ℕ) : ℝ) /
+          Real.log (N : ℝ))
+      atTop (𝓝 0) := by
+  refine squeeze_zero' ?hnonneg ?hle tendsto_euler_block_log_bound
+  · refine eventually_atTop.2 ?_
+    refine ⟨1, ?_⟩
+    intro N hN
+    let B : ℕ := 2 * Nat.log 2 N + c
+    have hBge : 1 ≤ B := by
+      dsimp [B]
+      omega
+    have hnum_nonneg : 0 ≤ Real.log (B : ℝ) := by
+      exact Real.log_nonneg (by exact_mod_cast hBge)
+    have hden_nonneg : 0 ≤ Real.log (N : ℝ) := by
+      exact Real.log_nonneg (by exact_mod_cast hN)
+    exact div_nonneg hnum_nonneg hden_nonneg
+  · refine eventually_atTop.2 ?_
+    refine ⟨2, ?_⟩
+    intro N hN
+    let B : ℕ := 2 * Nat.log 2 N + c
+    have hBpos : 0 < (B : ℝ) := by
+      exact_mod_cast (by dsimp [B]; omega : 0 < B)
+    have hlogNpos : 0 < Real.log (N : ℝ) := by
+      exact Real.log_pos (by exact_mod_cast hN)
+    have hnatlog_le :
+        ((Nat.log 2 N : ℕ) : ℝ) ≤ Real.log (N : ℝ) / Real.log 2 := by
+      simpa [Real.log_div_log] using (Real.natLog_le_logb N 2)
+    have hfour :
+        4 * ((Nat.log 2 N : ℕ) : ℝ) ≤
+          4 * (Real.log (N : ℝ) / Real.log 2) :=
+      mul_le_mul_of_nonneg_left hnatlog_le (by norm_num)
+    have hc_real : (c : ℝ) ≤ 6 := by exact_mod_cast hc
+    have hrewrite :
+        4 * (Real.log (N : ℝ) / Real.log 2) + 6 =
+          (4 / Real.log 2) * Real.log (N : ℝ) + 6 := by
+      have hlog2pos : 0 < Real.log 2 := Real.log_pos (by norm_num)
+      field_simp [hlog2pos.ne']
+    have hB_le :
+        (B : ℝ) ≤ (4 / Real.log 2) * Real.log (N : ℝ) + 6 := by
+      have hB_le' :
+          (B : ℝ) ≤ 4 * (Real.log (N : ℝ) / Real.log 2) + 6 := by
+        dsimp [B]
+        norm_num
+        nlinarith [hfour, hc_real]
+      exact hB_le'.trans_eq hrewrite
+    have hlogB_le :
+        Real.log (B : ℝ) ≤
+          Real.log ((4 / Real.log 2) * Real.log (N : ℝ) + 6) :=
+      Real.log_le_log hBpos hB_le
+    exact div_le_div_of_nonneg_right hlogB_le hlogNpos.le
+
+lemma log_visible_popular_cover_factor_div_log_tendsto_zero :
+    Tendsto
+      (fun N : ℕ =>
+        Real.log ((2 * Nat.log 2 N + 4 : ℕ) : ℝ) /
+          Real.log (N : ℝ))
+      atTop (𝓝 0) :=
+  log_two_mul_natLog_add_const_div_log_tendsto_zero
+    (by norm_num : 1 ≤ 4) (by norm_num : 4 ≤ 6)
+
+lemma log_visible_energy_cover_factor_div_log_tendsto_zero :
+    Tendsto
+      (fun N : ℕ =>
+        Real.log ((2 * Nat.log 2 N + 3 : ℕ) : ℝ) /
+          Real.log (N : ℝ))
+      atTop (𝓝 0) :=
+  log_two_mul_natLog_add_const_div_log_tendsto_zero
+    (by norm_num : 1 ≤ 3) (by norm_num : 3 ≤ 6)
+
+lemma visibleCanonicalDenominatorSet_card_le_cap
+    (a : ℕ → ℕ) (N : ℕ) :
+    (visibleCanonicalDenominatorSet a N).card ≤ N := by
+  have hsub : visibleCanonicalDenominatorSet a N ⊆ Finset.range N := by
+    intro q hq
+    rw [visibleCanonicalDenominatorSet] at hq
+    rcases Finset.mem_biUnion.mp hq with ⟨j, _hj, hqj⟩
+    rw [visibleCanonicalOddDenominatorBlock, Finset.mem_filter] at hqj
+    exact Finset.mem_range.mpr (by omega)
+  calc
+    (visibleCanonicalDenominatorSet a N).card ≤ (Finset.range N).card :=
+      Finset.card_le_card hsub
+    _ = N := by simp
+
+lemma visiblePopularDifference_ratio_nonneg_eventually
+    (a : ℕ → ℕ) :
+    ∀ᶠ N : ℕ in atTop,
+      0 ≤
+        Real.log
+            (popularDifferenceUpTo (visibleCanonicalDenominatorSet a N) N : ℝ) /
+          Real.log (N : ℝ) := by
+  refine (eventually_ge_atTop 1).mono ?_
+  intro N hN
+  have hnum_nonneg :
+      0 ≤ Real.log
+        (popularDifferenceUpTo (visibleCanonicalDenominatorSet a N) N : ℝ) :=
+    Real.log_nonneg
+      (by
+        exact_mod_cast
+          one_le_popularDifferenceUpTo
+            (visibleCanonicalDenominatorSet a N) N)
+  have hden_nonneg : 0 ≤ Real.log (N : ℝ) :=
+    Real.log_nonneg (by exact_mod_cast hN)
+  exact div_nonneg hnum_nonneg hden_nonneg
+
+lemma visiblePopularDifference_ratio_le_two_eventually
+    (a : ℕ → ℕ) :
+    ∀ᶠ N : ℕ in atTop,
+      Real.log
+          (popularDifferenceUpTo (visibleCanonicalDenominatorSet a N) N : ℝ) /
+        Real.log (N : ℝ) ≤ 2 := by
+  refine (eventually_ge_atTop 2).mono ?_
+  intro N hN
+  let P : ℕ := popularDifferenceUpTo (visibleCanonicalDenominatorSet a N) N
+  have hP_le_succ : P ≤ N + 1 := by
+    dsimp [P]
+    exact (popularDifferenceUpTo_le_card_add_one
+      (visibleCanonicalDenominatorSet a N) N).trans
+        (by
+          have hcard := visibleCanonicalDenominatorSet_card_le_cap a N
+          omega)
+  have hP_le_sq : P ≤ N ^ 2 := by
+    have hsq : N + 1 ≤ N ^ 2 := by
+      rw [pow_two]
+      nlinarith
+    exact hP_le_succ.trans hsq
+  have hPpos : 0 < (P : ℝ) := by
+    exact_mod_cast
+      (lt_of_lt_of_le Nat.zero_lt_one
+        (one_le_popularDifferenceUpTo
+          (visibleCanonicalDenominatorSet a N) N))
+  have hlog_le :
+      Real.log (P : ℝ) ≤ Real.log ((N ^ 2 : ℕ) : ℝ) :=
+    Real.log_le_log hPpos (by exact_mod_cast hP_le_sq)
+  have hlogNpos : 0 < Real.log (N : ℝ) :=
+    Real.log_pos (by exact_mod_cast hN)
+  have hdiv :
+      Real.log (P : ℝ) / Real.log (N : ℝ) ≤
+        Real.log ((N ^ 2 : ℕ) : ℝ) / Real.log (N : ℝ) :=
+    div_le_div_of_nonneg_right hlog_le hlogNpos.le
+  have hpowlog :
+      Real.log ((N ^ 2 : ℕ) : ℝ) = 2 * Real.log (N : ℝ) := by
+    norm_num [Nat.cast_pow, Real.log_pow]
+  have hright :
+      Real.log ((N ^ 2 : ℕ) : ℝ) / Real.log (N : ℝ) = 2 := by
+    rw [hpowlog]
+    field_simp [hlogNpos.ne']
+  rw [hright] at hdiv
+  simpa [P] using hdiv
+
+lemma canonicalBlockGrowth_le_visiblePopularDifference
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1))
+    (N : ℕ) :
+    canonicalBlockGrowth a N
+      ≤ popularDifferenceUpTo (visibleCanonicalDenominatorSet a N) N := by
+  exact canonicalBlockGrowth_le_of_visible_blockLength_le a
+    (one_le_popularDifferenceUpTo
+      (visibleCanonicalDenominatorSet a N) N)
+    (fun j _hj hden =>
+      (fullCanonicalBlock_additive_lower_bridge
+        (a := a) hpos (N := N) (j := j) hden).1)
+
+lemma log_popular_le_log_visibleBlockMax_add_log_log_error
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1)) :
+    ∀ᶠ N : ℕ in atTop,
+      Real.log
+          (popularDifferenceUpTo (visibleCanonicalDenominatorSet a N) N : ℝ) /
+        Real.log (N : ℝ)
+      ≤
+      Real.log (visibleCanonicalBlockMax a N : ℝ) / Real.log (N : ℝ) +
+      Real.log ((2 * Nat.log 2 N + 4 : ℕ) : ℝ) / Real.log (N : ℝ) := by
+  refine (eventually_ge_atTop 2).mono ?_
+  intro N hN
+  let P : ℕ := popularDifferenceUpTo (visibleCanonicalDenominatorSet a N) N
+  let M : ℕ := visibleCanonicalBlockMax a N
+  let K : ℕ := 2 * Nat.log 2 N + 4
+  have hupper :
+      P ≤ (2 * Nat.log 2 N + 3) * M + 1 := by
+    dsimp [P, M]
+    exact (visibleCanonical_additive_upper_bridge
+      (a := a) hpos N).1
+  have hP_le : P ≤ K * M := by
+    have hM1 : 1 ≤ M := by
+      dsimp [M]
+      exact one_le_visibleCanonicalBlockMax a N
+    have hstep :
+        (2 * Nat.log 2 N + 3) * M + 1 ≤ K * M := by
+      dsimp [K]
+      calc
+        (2 * Nat.log 2 N + 3) * M + 1
+            ≤ (2 * Nat.log 2 N + 3) * M + M := by
+              exact Nat.add_le_add_left hM1 _
+        _ = (2 * Nat.log 2 N + 4) * M := by ring
+    exact hupper.trans hstep
+  have hPpos : 0 < (P : ℝ) := by
+    dsimp [P]
+    exact_mod_cast
+      (lt_of_lt_of_le Nat.zero_lt_one
+        (one_le_popularDifferenceUpTo
+          (visibleCanonicalDenominatorSet a N) N))
+  have hKpos : 0 < (K : ℝ) := by
+    dsimp [K]
+    positivity
+  have hMpos : 0 < (M : ℝ) := by
+    dsimp [M]
+    exact_mod_cast
+      (lt_of_lt_of_le Nat.zero_lt_one
+        (one_le_visibleCanonicalBlockMax a N))
+  have hlogP_le :
+      Real.log (P : ℝ) ≤ Real.log (M : ℝ) + Real.log (K : ℝ) := by
+    calc
+      Real.log (P : ℝ) ≤ Real.log ((K * M : ℕ) : ℝ) :=
+        Real.log_le_log hPpos (by exact_mod_cast hP_le)
+      _ = Real.log ((K : ℝ) * (M : ℝ)) := by norm_num
+      _ = Real.log (K : ℝ) + Real.log (M : ℝ) := by
+        rw [Real.log_mul hKpos.ne' hMpos.ne']
+      _ = Real.log (M : ℝ) + Real.log (K : ℝ) := by ring
+  have hlogNpos : 0 < Real.log (N : ℝ) :=
+    Real.log_pos (by exact_mod_cast hN)
+  have hdiv :
+      Real.log (P : ℝ) / Real.log (N : ℝ) ≤
+        (Real.log (M : ℝ) + Real.log (K : ℝ)) /
+          Real.log (N : ℝ) :=
+    div_le_div_of_nonneg_right hlogP_le hlogNpos.le
+  have hsplit :
+      (Real.log (M : ℝ) + Real.log (K : ℝ)) / Real.log (N : ℝ) =
+        Real.log (M : ℝ) / Real.log (N : ℝ) +
+          Real.log (K : ℝ) / Real.log (N : ℝ) := by
+    ring
+  rw [hsplit] at hdiv
+  simpa [P, M, K] using hdiv
+
+lemma canonicalBlockExponent_le_visiblePopularDifferenceExponent
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1)) :
+    canonicalBlockExponent a ≤ visiblePopularDifferenceExponent a := by
+  let F : ℕ → ℝ := fun N =>
+    Real.log (canonicalBlockGrowth a N : ℝ) / Real.log (N : ℝ)
+  let P : ℕ → ℝ := fun N =>
+    Real.log
+        (popularDifferenceUpTo (visibleCanonicalDenominatorSet a N) N : ℝ) /
+      Real.log (N : ℝ)
+  have hFP : F ≤ᶠ[atTop] P := by
+    filter_upwards [eventually_ge_atTop 2] with N hN
+    let R : ℝ := canonicalBlockGrowth a N
+    let V : ℝ :=
+      popularDifferenceUpTo (visibleCanonicalDenominatorSet a N) N
+    have hRpos : 0 < R := by
+      dsimp [R]
+      exact_mod_cast
+        (lt_of_lt_of_le Nat.zero_lt_one
+          (one_le_canonicalBlockGrowth a N))
+    have hRV : R ≤ V := by
+      dsimp [R, V]
+      exact_mod_cast canonicalBlockGrowth_le_visiblePopularDifference
+        (a := a) hpos N
+    have hlogRV : Real.log R ≤ Real.log V :=
+      Real.log_le_log hRpos hRV
+    have hlogNpos : 0 < Real.log (N : ℝ) :=
+      Real.log_pos (by exact_mod_cast hN)
+    exact div_le_div_of_nonneg_right hlogRV hlogNpos.le
+  have hFcobdd :
+      Filter.IsCoboundedUnder (fun x y : ℝ => x ≤ y) atTop F :=
+    Filter.IsCoboundedUnder.of_frequently_ge
+      ((canonicalBlockGrowth_ratio_nonneg_eventually a).frequently.mono
+        (fun N hN => by simpa [F] using hN))
+  have hPbdd :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop P :=
+    Filter.isBoundedUnder_of_eventually_le
+      (by
+        filter_upwards [visiblePopularDifference_ratio_le_two_eventually a]
+          with N hN
+        simpa [P] using hN)
+  have hlim := Filter.limsup_le_limsup hFP hFcobdd hPbdd
+  simpa [canonicalBlockExponent, visiblePopularDifferenceExponent, F, P] using hlim
+
+lemma visiblePopularDifferenceExponent_le_canonicalBlockExponent
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1)) :
+    visiblePopularDifferenceExponent a ≤ canonicalBlockExponent a := by
+  let P : ℕ → ℝ := fun N =>
+    Real.log
+        (popularDifferenceUpTo (visibleCanonicalDenominatorSet a N) N : ℝ) /
+      Real.log (N : ℝ)
+  let M : ℕ → ℝ := fun N =>
+    Real.log (visibleCanonicalBlockMax a N : ℝ) / Real.log (N : ℝ)
+  have hPcobdd :
+      Filter.IsCoboundedUnder (fun x y : ℝ => x ≤ y) atTop P :=
+    Filter.IsCoboundedUnder.of_frequently_ge
+      ((visiblePopularDifference_ratio_nonneg_eventually a).frequently.mono
+        (fun N hN => by simpa [P] using hN))
+  have hPbdd :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop P :=
+    Filter.isBoundedUnder_of_eventually_le
+      (by
+        filter_upwards [visiblePopularDifference_ratio_le_two_eventually a]
+          with N hN
+        simpa [P] using hN)
+  have hMbdd :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop M :=
+    Filter.isBoundedUnder_of_eventually_le
+      (by
+        filter_upwards [visibleCanonicalBlockMax_ratio_le_one_eventually a]
+          with N hN
+        simpa [M] using hN)
+  have hmain : limsup P atTop ≤ limsup M atTop := by
+    rw [Filter.limsup_le_iff' hPcobdd hPbdd]
+    intro C hC
+    let L : ℝ := limsup M atTop
+    let C₀ : ℝ := (L + C) / 2
+    have hLC₀ : L < C₀ := by
+      dsimp [L, C₀]
+      linarith
+    have hC₀C : C₀ < C := by
+      dsimp [L, C₀]
+      linarith
+    have hgap : 0 < C - C₀ := by linarith
+    have hMlt : ∀ᶠ N : ℕ in atTop, M N < C₀ :=
+      Filter.eventually_lt_of_limsup_lt hLC₀ hMbdd
+    have herr :
+        ∀ᶠ N : ℕ in atTop,
+          Real.log ((2 * Nat.log 2 N + 4 : ℕ) : ℝ) /
+              Real.log (N : ℝ) < C - C₀ :=
+      log_visible_popular_cover_factor_div_log_tendsto_zero.eventually
+        (eventually_lt_nhds hgap)
+    filter_upwards
+      [log_popular_le_log_visibleBlockMax_add_log_log_error
+        (a := a) hpos, hMlt, herr]
+      with N hfinite hMN herrN
+    have hsum : M N +
+        Real.log ((2 * Nat.log 2 N + 4 : ℕ) : ℝ) /
+          Real.log (N : ℝ) ≤ C := by
+      nlinarith
+    exact hfinite.trans hsum
+  have hM_eq :
+      limsup M atTop = canonicalBlockExponent a := by
+    simpa [M] using
+      visibleCanonicalBlockExponent_eq_canonicalBlockExponent
+        (a := a) hpos
+  simpa [visiblePopularDifferenceExponent, P, M, hM_eq] using hmain
+
+theorem visiblePopularDifferenceExponent_eq_canonicalBlockExponent
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1)) :
+    visiblePopularDifferenceExponent a = canonicalBlockExponent a :=
+  le_antisymm
+    (visiblePopularDifferenceExponent_le_canonicalBlockExponent hpos)
+    (canonicalBlockExponent_le_visiblePopularDifferenceExponent hpos)
+
+lemma visibleAdditiveEnergy_ratio_nonneg_eventually
+    (a : ℕ → ℕ) :
+    ∀ᶠ N : ℕ in atTop,
+      0 ≤
+        Real.log
+            (additiveEnergy (visibleCanonicalDenominatorSet a N) : ℝ) /
+          Real.log (N : ℝ) := by
+  refine (eventually_ge_atTop 1).mono ?_
+  intro N hN
+  let E : ℕ := additiveEnergy (visibleCanonicalDenominatorSet a N)
+  have hlogE_nonneg : 0 ≤ Real.log (E : ℝ) := by
+    by_cases hE0 : E = 0
+    · simp [hE0]
+    · exact Real.log_nonneg
+        (by
+          exact_mod_cast Nat.succ_le_of_lt (Nat.pos_of_ne_zero hE0))
+  have hden_nonneg : 0 ≤ Real.log (N : ℝ) :=
+    Real.log_nonneg (by exact_mod_cast hN)
+  exact div_nonneg hlogE_nonneg hden_nonneg
+
+lemma visibleAdditiveEnergy_ratio_le_three_eventually
+    (a : ℕ → ℕ) :
+    ∀ᶠ N : ℕ in atTop,
+      Real.log
+          (additiveEnergy (visibleCanonicalDenominatorSet a N) : ℝ) /
+        Real.log (N : ℝ) ≤ 3 := by
+  refine (eventually_ge_atTop 2).mono ?_
+  intro N hN
+  let E : ℕ := additiveEnergy (visibleCanonicalDenominatorSet a N)
+  by_cases hE0 : E = 0
+  · simp [E, hE0]
+  · have hE_le : E ≤ N ^ 3 := by
+      dsimp [E]
+      exact (additiveEnergy_le_card_cube
+        (visibleCanonicalDenominatorSet a N)).trans
+          (Nat.pow_le_pow_left
+            (visibleCanonicalDenominatorSet_card_le_cap a N) 3)
+    have hEpos : 0 < (E : ℝ) := by
+      exact_mod_cast Nat.pos_of_ne_zero hE0
+    have hlog_le :
+        Real.log (E : ℝ) ≤ Real.log ((N ^ 3 : ℕ) : ℝ) :=
+      Real.log_le_log hEpos (by exact_mod_cast hE_le)
+    have hlogNpos : 0 < Real.log (N : ℝ) :=
+      Real.log_pos (by exact_mod_cast hN)
+    have hdiv :
+        Real.log (E : ℝ) / Real.log (N : ℝ) ≤
+          Real.log ((N ^ 3 : ℕ) : ℝ) / Real.log (N : ℝ) :=
+      div_le_div_of_nonneg_right hlog_le hlogNpos.le
+    have hpowlog :
+        Real.log ((N ^ 3 : ℕ) : ℝ) = 3 * Real.log (N : ℝ) := by
+      norm_num [Nat.cast_pow, Real.log_pow]
+    have hright :
+        Real.log ((N ^ 3 : ℕ) : ℝ) / Real.log (N : ℝ) = 3 := by
+      rw [hpowlog]
+      field_simp [hlogNpos.ne']
+    rw [hright] at hdiv
+    simpa [E] using hdiv
+
+lemma log_energy_le_three_log_visibleBlockMax_add_error
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1)) :
+    ∀ᶠ N : ℕ in atTop,
+      Real.log
+          (additiveEnergy (visibleCanonicalDenominatorSet a N) : ℝ) /
+        Real.log (N : ℝ)
+      ≤
+      3 * (Real.log (visibleCanonicalBlockMax a N : ℝ) /
+          Real.log (N : ℝ)) +
+      3 * (Real.log ((2 * Nat.log 2 N + 3 : ℕ) : ℝ) /
+          Real.log (N : ℝ)) := by
+  refine (eventually_ge_atTop 2).mono ?_
+  intro N hN
+  let E : ℕ := additiveEnergy (visibleCanonicalDenominatorSet a N)
+  let M : ℕ := visibleCanonicalBlockMax a N
+  let K : ℕ := 2 * Nat.log 2 N + 3
+  have hlogNpos : 0 < Real.log (N : ℝ) :=
+    Real.log_pos (by exact_mod_cast hN)
+  have hKpos : 0 < (K : ℝ) := by
+    dsimp [K]
+    positivity
+  have hMpos : 0 < (M : ℝ) := by
+    dsimp [M]
+    exact_mod_cast
+      (lt_of_lt_of_le Nat.zero_lt_one
+        (one_le_visibleCanonicalBlockMax a N))
+  have hRHS_nonneg :
+      0 ≤
+        3 * (Real.log (M : ℝ) / Real.log (N : ℝ)) +
+        3 * (Real.log (K : ℝ) / Real.log (N : ℝ)) := by
+    have hlogM_nonneg : 0 ≤ Real.log (M : ℝ) :=
+      Real.log_nonneg (by
+        dsimp [M]
+        exact_mod_cast one_le_visibleCanonicalBlockMax a N)
+    have hlogK_nonneg : 0 ≤ Real.log (K : ℝ) :=
+      Real.log_nonneg (by
+        have hKge : 1 ≤ K := by
+          dsimp [K]
+          omega
+        exact_mod_cast hKge)
+    positivity
+  by_cases hE0 : E = 0
+  · have hleft : Real.log (E : ℝ) / Real.log (N : ℝ) = 0 := by
+      simp [hE0]
+    rw [hleft]
+    exact hRHS_nonneg
+  · have hupper : E ≤ (K * M) ^ 3 := by
+      dsimp [E, K, M]
+      exact (visibleCanonical_additive_upper_bridge
+        (a := a) hpos N).2.1
+    have hEpos : 0 < (E : ℝ) := by
+      exact_mod_cast Nat.pos_of_ne_zero hE0
+    have hlogE_le :
+        Real.log (E : ℝ) ≤ Real.log (((K * M) ^ 3 : ℕ) : ℝ) :=
+      Real.log_le_log hEpos (by exact_mod_cast hupper)
+    have hlogE_le_pow :
+        Real.log (E : ℝ) ≤
+          3 * Real.log ((K : ℝ) * (M : ℝ)) := by
+      simpa [Nat.cast_pow, Nat.cast_mul, Real.log_pow] using hlogE_le
+    have hlog_mul :
+        Real.log ((K : ℝ) * (M : ℝ)) =
+          Real.log (K : ℝ) + Real.log (M : ℝ) := by
+      rw [Real.log_mul hKpos.ne' hMpos.ne']
+    have hlogE_le' :
+        Real.log (E : ℝ) ≤
+          3 * (Real.log (K : ℝ) + Real.log (M : ℝ)) := by
+      nlinarith
+    have hdiv :
+        Real.log (E : ℝ) / Real.log (N : ℝ) ≤
+          (3 * (Real.log (K : ℝ) + Real.log (M : ℝ))) /
+            Real.log (N : ℝ) :=
+      div_le_div_of_nonneg_right hlogE_le' hlogNpos.le
+    have hsplit :
+        (3 * (Real.log (K : ℝ) + Real.log (M : ℝ))) /
+            Real.log (N : ℝ) =
+          3 * (Real.log (M : ℝ) / Real.log (N : ℝ)) +
+          3 * (Real.log (K : ℝ) / Real.log (N : ℝ)) := by
+      ring
+    rw [hsplit] at hdiv
+    simpa [E, M, K, add_comm, add_left_comm, add_assoc] using hdiv
+
+lemma visibleAdditiveEnergyExponent_le_three_mul_canonicalBlockExponent
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1)) :
+    visibleAdditiveEnergyExponent a ≤ 3 * canonicalBlockExponent a := by
+  let E : ℕ → ℝ := fun N =>
+    Real.log
+        (additiveEnergy (visibleCanonicalDenominatorSet a N) : ℝ) /
+      Real.log (N : ℝ)
+  let M : ℕ → ℝ := fun N =>
+    Real.log (visibleCanonicalBlockMax a N : ℝ) / Real.log (N : ℝ)
+  have hEcobdd :
+      Filter.IsCoboundedUnder (fun x y : ℝ => x ≤ y) atTop E :=
+    Filter.IsCoboundedUnder.of_frequently_ge
+      ((visibleAdditiveEnergy_ratio_nonneg_eventually a).frequently.mono
+        (fun N hN => by simpa [E] using hN))
+  have hEbdd :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop E :=
+    Filter.isBoundedUnder_of_eventually_le
+      (by
+        filter_upwards [visibleAdditiveEnergy_ratio_le_three_eventually a]
+          with N hN
+        simpa [E] using hN)
+  have hMbdd :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop M :=
+    Filter.isBoundedUnder_of_eventually_le
+      (by
+        filter_upwards [visibleCanonicalBlockMax_ratio_le_one_eventually a]
+          with N hN
+        simpa [M] using hN)
+  have hM_eq :
+      limsup M atTop = canonicalBlockExponent a := by
+    simpa [M] using
+      visibleCanonicalBlockExponent_eq_canonicalBlockExponent
+        (a := a) hpos
+  rw [← hM_eq]
+  have hmain : limsup E atTop ≤ 3 * limsup M atTop := by
+    rw [Filter.limsup_le_iff' hEcobdd hEbdd]
+    intro C hC
+    let L : ℝ := limsup M atTop
+    let C₀ : ℝ := (L + C / 3) / 2
+    have hLltCdiv : L < C / 3 := by
+      nlinarith
+    have hLC₀ : L < C₀ := by
+      dsimp [C₀]
+      nlinarith
+    have h3C₀C : 3 * C₀ < C := by
+      dsimp [C₀]
+      nlinarith
+    have hgap : 0 < (C - 3 * C₀) / 3 := by
+      nlinarith
+    have hMlt : ∀ᶠ N : ℕ in atTop, M N < C₀ :=
+      Filter.eventually_lt_of_limsup_lt hLC₀ hMbdd
+    have herr :
+        ∀ᶠ N : ℕ in atTop,
+          Real.log ((2 * Nat.log 2 N + 3 : ℕ) : ℝ) /
+              Real.log (N : ℝ) < (C - 3 * C₀) / 3 :=
+      log_visible_energy_cover_factor_div_log_tendsto_zero.eventually
+        (eventually_lt_nhds hgap)
+    filter_upwards
+      [log_energy_le_three_log_visibleBlockMax_add_error
+        (a := a) hpos, hMlt, herr]
+      with N hfinite hMN herrN
+    have hsum :
+        3 * M N +
+          3 * (Real.log ((2 * Nat.log 2 N + 3 : ℕ) : ℝ) /
+            Real.log (N : ℝ)) ≤ C := by
+      nlinarith
+    exact hfinite.trans hsum
+  simpa [visibleAdditiveEnergyExponent, E, M] using hmain
+
+lemma three_log_canonicalBlockGrowth_sub_log_two_le_log_visibleEnergy
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1)) :
+    ∀ᶠ N : ℕ in atTop,
+      3 * (Real.log (canonicalBlockGrowth a N : ℝ) /
+          Real.log (N : ℝ)) -
+        Real.log 2 / Real.log (N : ℝ)
+      ≤
+      Real.log
+          (additiveEnergy (visibleCanonicalDenominatorSet a N) : ℝ) /
+        Real.log (N : ℝ) := by
+  refine (eventually_ge_atTop 2).mono ?_
+  intro N hN
+  let R : ℕ := canonicalBlockGrowth a N
+  let E : ℕ := additiveEnergy (visibleCanonicalDenominatorSet a N)
+  have hlogNpos : 0 < Real.log (N : ℝ) :=
+    Real.log_pos (by exact_mod_cast hN)
+  have hElog_nonneg : 0 ≤ Real.log (E : ℝ) := by
+    by_cases hE0 : E = 0
+    · simp [hE0]
+    · exact Real.log_nonneg
+        (by exact_mod_cast Nat.succ_le_of_lt (Nat.pos_of_ne_zero hE0))
+  have hEratio_nonneg :
+      0 ≤ Real.log (E : ℝ) / Real.log (N : ℝ) :=
+    div_nonneg hElog_nonneg hlogNpos.le
+  by_cases hRone : R = 1
+  · have hlogR : Real.log (R : ℝ) = 0 := by
+      rw [hRone]
+      norm_num
+    have hleft_nonpos :
+        3 * (Real.log (R : ℝ) / Real.log (N : ℝ)) -
+          Real.log 2 / Real.log (N : ℝ) ≤ 0 := by
+      have hconst_nonneg :
+          0 ≤ Real.log 2 / Real.log (N : ℝ) := by
+        exact div_nonneg (Real.log_nonneg (by norm_num)) hlogNpos.le
+      rw [hlogR]
+      simp only [zero_div, mul_zero, zero_sub]
+      exact neg_nonpos.mpr hconst_nonneg
+    exact hleft_nonpos.trans hEratio_nonneg
+  · have hRgt1 : 1 < R := by
+      have hRge : 1 ≤ R := by
+        dsimp [R]
+        exact one_le_canonicalBlockGrowth a N
+      omega
+    rcases canonicalBlockGrowth_eq_one_or_exists_visible_le_safe a N with
+      hRone' | ⟨j, _hj, hden, hRleSafe⟩
+    · exact False.elim (hRone (by simpa [R] using hRone'))
+    · have hsafe_gt : 1 < canonicalSafeBlockLength a j :=
+        lt_of_lt_of_le hRgt1 hRleSafe
+      have hsafe_le_len :
+          canonicalSafeBlockLength a j ≤ canonicalBlockLength a j := by
+        unfold canonicalSafeBlockLength at hsafe_gt ⊢
+        omega
+      have hRleLen : R ≤ canonicalBlockLength a j :=
+        hRleSafe.trans hsafe_le_len
+      have hbridge :
+          (canonicalBlockLength a j) ^ 3 ≤ 2 * E := by
+        dsimp [E]
+        exact (fullCanonicalBlock_additive_lower_bridge
+          (a := a) hpos (N := N) (j := j) hden).2.1
+      have hRpow_le : R ^ 3 ≤ 2 * E :=
+        (Nat.pow_le_pow_left hRleLen 3).trans hbridge
+      have hRpos_nat : 0 < R := lt_trans Nat.zero_lt_one hRgt1
+      have hRpow_pos : 0 < R ^ 3 := pow_pos hRpos_nat 3
+      have hEpos_nat : 0 < E := by
+        have h2Epos : 0 < 2 * E := lt_of_lt_of_le hRpow_pos hRpow_le
+        omega
+      have hRpos : 0 < (R : ℝ) := by exact_mod_cast hRpos_nat
+      have hEpos : 0 < (E : ℝ) := by exact_mod_cast hEpos_nat
+      have hlog_le :
+          Real.log ((R ^ 3 : ℕ) : ℝ) ≤ Real.log ((2 * E : ℕ) : ℝ) :=
+        Real.log_le_log
+          (by exact_mod_cast hRpow_pos)
+          (by exact_mod_cast hRpow_le)
+      have hlogRpow :
+          Real.log ((R ^ 3 : ℕ) : ℝ) = 3 * Real.log (R : ℝ) := by
+        norm_num [Nat.cast_pow, Real.log_pow]
+      have hlog2E :
+          Real.log ((2 * E : ℕ) : ℝ) =
+            Real.log 2 + Real.log (E : ℝ) := by
+        norm_num [Nat.cast_mul]
+        rw [Real.log_mul (by norm_num : (2 : ℝ) ≠ 0) hEpos.ne']
+      have hineq :
+          3 * Real.log (R : ℝ) ≤ Real.log 2 + Real.log (E : ℝ) := by
+        nlinarith
+      have hdiv :
+          (3 * Real.log (R : ℝ)) / Real.log (N : ℝ) ≤
+            (Real.log 2 + Real.log (E : ℝ)) / Real.log (N : ℝ) :=
+        div_le_div_of_nonneg_right hineq hlogNpos.le
+      have hsplit :
+          (Real.log 2 + Real.log (E : ℝ)) / Real.log (N : ℝ) =
+            Real.log 2 / Real.log (N : ℝ) +
+              Real.log (E : ℝ) / Real.log (N : ℝ) := by
+        ring
+      rw [hsplit] at hdiv
+      have hgoal_local :
+          3 * (Real.log (R : ℝ) / Real.log (N : ℝ)) -
+            Real.log 2 / Real.log (N : ℝ) ≤
+          Real.log (E : ℝ) / Real.log (N : ℝ) := by
+        have hthree :
+            3 * (Real.log (R : ℝ) / Real.log (N : ℝ)) =
+              (3 * Real.log (R : ℝ)) / Real.log (N : ℝ) := by
+          ring
+        rw [hthree]
+        nlinarith
+      simpa [R, E] using hgoal_local
+
+lemma three_mul_canonicalBlockExponent_le_visibleAdditiveEnergyExponent
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1)) :
+    3 * canonicalBlockExponent a ≤ visibleAdditiveEnergyExponent a := by
+  let F : ℕ → ℝ := fun N =>
+    Real.log (canonicalBlockGrowth a N : ℝ) / Real.log (N : ℝ)
+  let E : ℕ → ℝ := fun N =>
+    Real.log
+        (additiveEnergy (visibleCanonicalDenominatorSet a N) : ℝ) /
+      Real.log (N : ℝ)
+  have hFcobdd :
+      Filter.IsCoboundedUnder (fun x y : ℝ => x ≤ y) atTop F :=
+    Filter.IsCoboundedUnder.of_frequently_ge
+      ((canonicalBlockGrowth_ratio_nonneg_eventually a).frequently.mono
+        (fun N hN => by simpa [F] using hN))
+  have hEbdd :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop E :=
+    Filter.isBoundedUnder_of_eventually_le
+      (by
+        filter_upwards [visibleAdditiveEnergy_ratio_le_three_eventually a]
+          with N hN
+        simpa [E] using hN)
+  rw [canonicalBlockExponent]
+  refine le_of_forall_lt ?_
+  intro C hC
+  let L : ℝ := limsup F atTop
+  let C₀ : ℝ := (C / 3 + L) / 2
+  have hCdivL : C / 3 < L := by
+    dsimp [L]
+    nlinarith
+  have hC₀L : C₀ < L := by
+    dsimp [C₀]
+    nlinarith
+  have hC_lt_3C₀ : C < 3 * C₀ := by
+    dsimp [C₀]
+    nlinarith
+  let D : ℝ := (C + 3 * C₀) / 2
+  have hCD : C < D := by
+    dsimp [D]
+    nlinarith
+  have hDlt : D < 3 * C₀ := by
+    dsimp [D]
+    nlinarith
+  have hgap : 0 < 3 * C₀ - D := by nlinarith
+  have hfreqF : ∃ᶠ N : ℕ in atTop, C₀ < F N :=
+    Filter.frequently_lt_of_lt_limsup hFcobdd (by simpa [L] using hC₀L)
+  have hsmall :
+      ∀ᶠ N : ℕ in atTop,
+        Real.log 2 / Real.log (N : ℝ) < 3 * C₀ - D :=
+    (log_const_over_log_nat_tendsto_zero (Real.log 2)).eventually
+      (eventually_lt_nhds hgap)
+  have hlower :=
+    three_log_canonicalBlockGrowth_sub_log_two_le_log_visibleEnergy
+      (a := a) hpos
+  have hfreqE : ∃ᶠ N : ℕ in atTop, D ≤ E N :=
+    (hfreqF.and_eventually (hsmall.and hlower)).mono (fun N hN => by
+      rcases hN with ⟨hFN, hsmallN, hlowerN⟩
+      have hcalc : D ≤ 3 * F N - Real.log 2 / Real.log (N : ℝ) := by
+        nlinarith
+      exact hcalc.trans (by simpa [F, E] using hlowerN))
+  exact (lt_of_lt_of_le hCD
+    (Filter.le_limsup_of_frequently_le hfreqE hEbdd))
+
+theorem visibleAdditiveEnergyExponent_eq_three_mul_canonicalBlockExponent
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1)) :
+    visibleAdditiveEnergyExponent a = 3 * canonicalBlockExponent a :=
+  le_antisymm
+    (visibleAdditiveEnergyExponent_le_three_mul_canonicalBlockExponent hpos)
+    (three_mul_canonicalBlockExponent_le_visibleAdditiveEnergyExponent hpos)
+
+lemma properHilbertCubeDimension_ge_of_hasProperHilbertCube
+    {S : Finset ℕ} {h : ℕ}
+    (hh : HasProperHilbertCube S h) :
+    h ≤ properHilbertCubeDimension S := by
+  classical
+  have hcard_pow : 2 ^ h ≤ S.card :=
+    two_pow_le_card_of_hasProperHilbertCube hh
+  have hle_pow : h ≤ 2 ^ h :=
+    Nat.le_of_lt h.lt_two_pow_self
+  have hcard : h ≤ S.card := hle_pow.trans hcard_pow
+  have hmem : h ∈ Finset.range (S.card + 1) :=
+    Finset.mem_range.mpr (Nat.lt_succ_of_le hcard)
+  unfold properHilbertCubeDimension
+  calc
+    h = (if HasProperHilbertCube S h then h else 0) := by simp [hh]
+    _ ≤ (Finset.range (S.card + 1)).sup
+        (fun k : ℕ => if HasProperHilbertCube S k then k else 0) :=
+      Finset.le_sup
+        (s := Finset.range (S.card + 1))
+        (f := fun k : ℕ => if HasProperHilbertCube S k then k else 0)
+        hmem
+
+lemma hasProperHilbertCube_properHilbertCubeDimension_of_pos
+    {S : Finset ℕ}
+    (hposdim : 0 < properHilbertCubeDimension S) :
+    HasProperHilbertCube S (properHilbertCubeDimension S) := by
+  classical
+  let I : Finset ℕ := Finset.range (S.card + 1)
+  let f : ℕ → ℕ := fun h : ℕ =>
+    if HasProperHilbertCube S h then h else 0
+  have hIne : I.Nonempty := ⟨0, by simp [I]⟩
+  rcases Finset.exists_mem_eq_sup I hIne f with ⟨h, _hmem, hsup⟩
+  have hfpos : 0 < f h := by
+    have hdim_eq : properHilbertCubeDimension S = I.sup f := by
+      simp [properHilbertCubeDimension, I, f]
+    rw [hdim_eq, hsup] at hposdim
+    exact hposdim
+  have hcube : HasProperHilbertCube S h := by
+    by_contra hnot
+    have hfzero : f h = 0 := by simp [f, hnot]
+    omega
+  have hfh : f h = h := by simp [f, hcube]
+  have hdim_eq : properHilbertCubeDimension S = h := by
+    calc
+      properHilbertCubeDimension S = I.sup f := by
+        simp [properHilbertCubeDimension, I, f]
+      _ = f h := hsup
+      _ = h := hfh
+  simpa [hdim_eq] using hcube
+
+lemma two_pow_properHilbertCubeDimension_le_cover
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1))
+    (N : ℕ) :
+    2 ^ properHilbertCubeDimension
+          (visibleCanonicalDenominatorSet a N)
+      ≤
+    (2 * Nat.log 2 N + 3) * visibleCanonicalBlockMax a N := by
+  let S : Finset ℕ := visibleCanonicalDenominatorSet a N
+  let H : ℕ := properHilbertCubeDimension S
+  by_cases hH0 : H = 0
+  · have hM1 : 1 ≤ visibleCanonicalBlockMax a N :=
+      one_le_visibleCanonicalBlockMax a N
+    rw [show properHilbertCubeDimension
+        (visibleCanonicalDenominatorSet a N) = 0 by simpa [S, H] using hH0]
+    simp only [pow_zero]
+    exact Nat.succ_le_of_lt
+      (Nat.mul_pos (by omega)
+        (lt_of_lt_of_le Nat.zero_lt_one hM1))
+  · have hHpos : 0 < H := Nat.pos_of_ne_zero hH0
+    have hcube : HasProperHilbertCube S H :=
+      hasProperHilbertCube_properHilbertCubeDimension_of_pos
+        (S := S) hHpos
+    have hupper :=
+      (visibleCanonical_additive_upper_bridge (a := a) hpos N).2.2 H
+    simpa [S, H] using hupper hcube
+
+lemma natLog_two_canonicalBlockLength_le_visibleHilbertCubeDimension
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1))
+    {N j : ℕ}
+    (hjN : continuantDen a (j + 1) ≤ N) :
+    Nat.log 2 (canonicalBlockLength a j)
+      ≤
+    properHilbertCubeDimension
+      (visibleCanonicalDenominatorSet a N) := by
+  by_cases hm0 : canonicalBlockLength a j = 0
+  · simp [hm0]
+  · have hpow :
+        2 ^ Nat.log 2 (canonicalBlockLength a j)
+          ≤ canonicalBlockLength a j :=
+      Nat.pow_log_le_self 2 hm0
+    have hcube :
+        HasProperHilbertCube
+          (visibleCanonicalDenominatorSet a N)
+          (Nat.log 2 (canonicalBlockLength a j)) :=
+      (fullCanonicalBlock_additive_lower_bridge
+        (a := a) hpos (N := N) (j := j) hjN).2.2
+        (Nat.log 2 (canonicalBlockLength a j)) hpow
+    exact properHilbertCubeDimension_ge_of_hasProperHilbertCube hcube
+
+lemma real_log_le_succ_natLog_mul_log_two
+    {m : ℕ} (hm : 1 ≤ m) :
+    Real.log (m : ℝ)
+      ≤ ((Nat.log 2 m + 1 : ℕ) : ℝ) * Real.log 2 := by
+  have hmpos : 0 < (m : ℝ) := by
+    exact_mod_cast (lt_of_lt_of_le Nat.zero_lt_one hm)
+  have hpow_lt : m < 2 ^ (Nat.log 2 m + 1) :=
+    Nat.lt_pow_succ_log_self Nat.one_lt_two m
+  have hlog_le :
+      Real.log (m : ℝ) ≤
+        Real.log ((2 ^ (Nat.log 2 m + 1) : ℕ) : ℝ) :=
+    Real.log_le_log hmpos (by exact_mod_cast (le_of_lt hpow_lt))
+  have hpowlog :
+      Real.log ((2 ^ (Nat.log 2 m + 1) : ℕ) : ℝ) =
+        ((Nat.log 2 m + 1 : ℕ) : ℝ) * Real.log 2 := by
+    norm_num [Nat.cast_pow, Real.log_pow]
+  exact hlog_le.trans_eq hpowlog
+
+lemma hilbertDimension_ratio_le_visibleBlockMax_ratio_div_log_two_add_error
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1)) :
+    ∀ᶠ N : ℕ in atTop,
+      (properHilbertCubeDimension
+          (visibleCanonicalDenominatorSet a N) : ℝ) /
+        Real.log (N : ℝ)
+      ≤
+      (Real.log (visibleCanonicalBlockMax a N : ℝ) /
+          Real.log (N : ℝ) +
+        Real.log ((2 * Nat.log 2 N + 3 : ℕ) : ℝ) /
+          Real.log (N : ℝ)) /
+        Real.log 2 := by
+  refine (eventually_ge_atTop 2).mono ?_
+  intro N hN
+  let H : ℕ := properHilbertCubeDimension
+    (visibleCanonicalDenominatorSet a N)
+  let M : ℕ := visibleCanonicalBlockMax a N
+  let K : ℕ := 2 * Nat.log 2 N + 3
+  have hlog2pos : 0 < Real.log 2 := Real.log_pos (by norm_num)
+  have hlogNpos : 0 < Real.log (N : ℝ) :=
+    Real.log_pos (by exact_mod_cast hN)
+  have hKpos : 0 < (K : ℝ) := by
+    dsimp [K]
+    positivity
+  have hMpos : 0 < (M : ℝ) := by
+    dsimp [M]
+    exact_mod_cast
+      (lt_of_lt_of_le Nat.zero_lt_one
+        (one_le_visibleCanonicalBlockMax a N))
+  have hpow :
+      2 ^ H ≤ K * M := by
+    dsimp [H, K, M]
+    exact two_pow_properHilbertCubeDimension_le_cover
+      (a := a) hpos N
+  have hpowpos : 0 < ((2 ^ H : ℕ) : ℝ) := by
+    exact_mod_cast (pow_pos (by norm_num : 0 < 2) H)
+  have hlog_le :
+      Real.log ((2 ^ H : ℕ) : ℝ) ≤ Real.log ((K * M : ℕ) : ℝ) :=
+    Real.log_le_log hpowpos (by exact_mod_cast hpow)
+  have hlog_pow :
+      Real.log ((2 ^ H : ℕ) : ℝ) = (H : ℝ) * Real.log 2 := by
+    norm_num [Nat.cast_pow, Real.log_pow]
+  have hlog_mul :
+      Real.log ((K * M : ℕ) : ℝ) =
+        Real.log (K : ℝ) + Real.log (M : ℝ) := by
+    norm_num [Nat.cast_mul]
+    rw [Real.log_mul hKpos.ne' hMpos.ne']
+  have hmul_le :
+      (H : ℝ) * Real.log 2 ≤
+        Real.log (K : ℝ) + Real.log (M : ℝ) := by
+    calc
+      (H : ℝ) * Real.log 2 =
+          Real.log ((2 ^ H : ℕ) : ℝ) := by rw [hlog_pow]
+      _ ≤ Real.log ((K * M : ℕ) : ℝ) := hlog_le
+      _ = Real.log (K : ℝ) + Real.log (M : ℝ) := hlog_mul
+  have hdiv1 :
+      (H : ℝ) ≤
+        (Real.log (K : ℝ) + Real.log (M : ℝ)) / Real.log 2 := by
+    exact (le_div_iff₀ hlog2pos).2 hmul_le
+  have hdiv2 :
+      (H : ℝ) / Real.log (N : ℝ) ≤
+        ((Real.log (K : ℝ) + Real.log (M : ℝ)) / Real.log 2) /
+          Real.log (N : ℝ) :=
+    div_le_div_of_nonneg_right hdiv1 hlogNpos.le
+  have hrewrite :
+      ((Real.log (K : ℝ) + Real.log (M : ℝ)) / Real.log 2) /
+          Real.log (N : ℝ) =
+        (Real.log (M : ℝ) / Real.log (N : ℝ) +
+          Real.log (K : ℝ) / Real.log (N : ℝ)) /
+          Real.log 2 := by
+    field_simp [hlog2pos.ne', hlogNpos.ne']
+    ring
+  rw [hrewrite] at hdiv2
+  simpa [H, M, K] using hdiv2
+
+lemma visibleHilbertCube_ratio_nonneg_eventually
+    (a : ℕ → ℕ) :
+    ∀ᶠ N : ℕ in atTop,
+      0 ≤
+        (properHilbertCubeDimension
+            (visibleCanonicalDenominatorSet a N) : ℝ) /
+          Real.log (N : ℝ) := by
+  refine (eventually_ge_atTop 1).mono ?_
+  intro N hN
+  exact div_nonneg (by positivity)
+    (Real.log_nonneg (by exact_mod_cast hN))
+
+lemma visibleHilbertCube_ratio_le_two_div_log_two_eventually
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1)) :
+    ∀ᶠ N : ℕ in atTop,
+      (properHilbertCubeDimension
+          (visibleCanonicalDenominatorSet a N) : ℝ) /
+        Real.log (N : ℝ)
+      ≤ 2 / Real.log 2 := by
+  have herr :
+      ∀ᶠ N : ℕ in atTop,
+        Real.log ((2 * Nat.log 2 N + 3 : ℕ) : ℝ) /
+            Real.log (N : ℝ) < 1 :=
+    log_visible_energy_cover_factor_div_log_tendsto_zero.eventually
+      (eventually_lt_nhds (by norm_num : (0 : ℝ) < 1))
+  filter_upwards
+    [hilbertDimension_ratio_le_visibleBlockMax_ratio_div_log_two_add_error
+      (a := a) hpos,
+      visibleCanonicalBlockMax_ratio_le_one_eventually a,
+      herr]
+    with N hfinite hM herrN
+  have hlog2pos : 0 < Real.log 2 := Real.log_pos (by norm_num)
+  have hsum :
+      (Real.log (visibleCanonicalBlockMax a N : ℝ) /
+          Real.log (N : ℝ) +
+        Real.log ((2 * Nat.log 2 N + 3 : ℕ) : ℝ) /
+          Real.log (N : ℝ)) /
+        Real.log 2 ≤ 2 / Real.log 2 := by
+    gcongr
+    linarith
+  exact hfinite.trans hsum
+
+lemma visibleHilbertCubeExponent_le_canonicalBlockExponent_div_log_two
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1)) :
+    visibleHilbertCubeExponent a
+      ≤ canonicalBlockExponent a / Real.log 2 := by
+  let H : ℕ → ℝ := fun N =>
+    (properHilbertCubeDimension
+        (visibleCanonicalDenominatorSet a N) : ℝ) /
+      Real.log (N : ℝ)
+  let M : ℕ → ℝ := fun N =>
+    Real.log (visibleCanonicalBlockMax a N : ℝ) / Real.log (N : ℝ)
+  have hHcobdd :
+      Filter.IsCoboundedUnder (fun x y : ℝ => x ≤ y) atTop H :=
+    Filter.IsCoboundedUnder.of_frequently_ge
+      ((visibleHilbertCube_ratio_nonneg_eventually a).frequently.mono
+        (fun N hN => by simpa [H] using hN))
+  have hHbdd :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop H :=
+    Filter.isBoundedUnder_of_eventually_le
+      (by
+        filter_upwards
+          [visibleHilbertCube_ratio_le_two_div_log_two_eventually
+            (a := a) hpos]
+          with N hN
+        simpa [H] using hN)
+  have hMbdd :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop M :=
+    Filter.isBoundedUnder_of_eventually_le
+      (by
+        filter_upwards [visibleCanonicalBlockMax_ratio_le_one_eventually a]
+          with N hN
+        simpa [M] using hN)
+  have hM_eq :
+      limsup M atTop = canonicalBlockExponent a := by
+    simpa [M] using
+      visibleCanonicalBlockExponent_eq_canonicalBlockExponent
+        (a := a) hpos
+  rw [← hM_eq]
+  have hmain : limsup H atTop ≤ limsup M atTop / Real.log 2 := by
+    rw [Filter.limsup_le_iff' hHcobdd hHbdd]
+    intro C hC
+    let L : ℝ := limsup M atTop
+    let C₀ : ℝ := (L + C * Real.log 2) / 2
+    have hlog2pos : 0 < Real.log 2 := Real.log_pos (by norm_num)
+    have hLltClog : L < C * Real.log 2 := by
+      have hmul := mul_lt_mul_of_pos_right hC hlog2pos
+      field_simp [hlog2pos.ne'] at hmul
+      simpa [L, mul_comm] using hmul
+    have hLC₀ : L < C₀ := by
+      dsimp [C₀]
+      nlinarith
+    have hC₀lt : C₀ < C * Real.log 2 := by
+      dsimp [C₀]
+      nlinarith
+    have hgap : 0 < C * Real.log 2 - C₀ := by
+      nlinarith
+    have hMlt : ∀ᶠ N : ℕ in atTop, M N < C₀ :=
+      Filter.eventually_lt_of_limsup_lt hLC₀ hMbdd
+    have herr :
+        ∀ᶠ N : ℕ in atTop,
+          Real.log ((2 * Nat.log 2 N + 3 : ℕ) : ℝ) /
+              Real.log (N : ℝ) < C * Real.log 2 - C₀ :=
+      log_visible_energy_cover_factor_div_log_tendsto_zero.eventually
+        (eventually_lt_nhds hgap)
+    filter_upwards
+      [hilbertDimension_ratio_le_visibleBlockMax_ratio_div_log_two_add_error
+        (a := a) hpos, hMlt, herr]
+      with N hfinite hMN herrN
+    have hsum :
+        (M N +
+          Real.log ((2 * Nat.log 2 N + 3 : ℕ) : ℝ) /
+            Real.log (N : ℝ)) /
+          Real.log 2 ≤ C := by
+      rw [div_le_iff₀ hlog2pos]
+      nlinarith
+    exact hfinite.trans (by simpa [M] using hsum)
+  simpa [visibleHilbertCubeExponent, H, M] using hmain
+
+lemma log_canonicalBlockGrowth_div_log_two_sub_inv_log_le_hilbertDimension
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1)) :
+    ∀ᶠ N : ℕ in atTop,
+      (Real.log (canonicalBlockGrowth a N : ℝ) /
+          Real.log (N : ℝ)) / Real.log 2 -
+        1 / Real.log (N : ℝ)
+      ≤
+      (properHilbertCubeDimension
+          (visibleCanonicalDenominatorSet a N) : ℝ) /
+        Real.log (N : ℝ) := by
+  refine (eventually_ge_atTop 2).mono ?_
+  intro N hN
+  let R : ℕ := canonicalBlockGrowth a N
+  let H : ℕ := properHilbertCubeDimension
+    (visibleCanonicalDenominatorSet a N)
+  have hlog2pos : 0 < Real.log 2 := Real.log_pos (by norm_num)
+  have hlogNpos : 0 < Real.log (N : ℝ) :=
+    Real.log_pos (by exact_mod_cast hN)
+  have hHratio_nonneg : 0 ≤ (H : ℝ) / Real.log (N : ℝ) :=
+    div_nonneg (by positivity) hlogNpos.le
+  by_cases hRone : R = 1
+  · have hlogR : Real.log (R : ℝ) = 0 := by
+      rw [hRone]
+      norm_num
+    have hleft_nonpos :
+        (Real.log (R : ℝ) / Real.log (N : ℝ)) / Real.log 2 -
+          1 / Real.log (N : ℝ) ≤ 0 := by
+      have hinv_nonneg : 0 ≤ 1 / Real.log (N : ℝ) := by positivity
+      rw [hlogR]
+      simp only [zero_div, sub_nonpos]
+      exact hinv_nonneg
+    exact hleft_nonpos.trans hHratio_nonneg
+  · have hRgt1 : 1 < R := by
+      have hRge : 1 ≤ R := by
+        dsimp [R]
+        exact one_le_canonicalBlockGrowth a N
+      omega
+    rcases canonicalBlockGrowth_eq_one_or_exists_visible_le_safe a N with
+      hRone' | ⟨j, _hj, hden, hRleSafe⟩
+    · exact False.elim (hRone (by simpa [R] using hRone'))
+    · have hsafe_gt : 1 < canonicalSafeBlockLength a j :=
+        lt_of_lt_of_le hRgt1 hRleSafe
+      have hsafe_le_len :
+          canonicalSafeBlockLength a j ≤ canonicalBlockLength a j := by
+        unfold canonicalSafeBlockLength at hsafe_gt ⊢
+        omega
+      have hRleLen : R ≤ canonicalBlockLength a j :=
+        hRleSafe.trans hsafe_le_len
+      have hlen_ge : 1 ≤ canonicalBlockLength a j := by
+        exact (le_of_lt hRgt1).trans hRleLen
+      have hnatLog_le_H :
+          Nat.log 2 (canonicalBlockLength a j) ≤ H := by
+        dsimp [H]
+        exact natLog_two_canonicalBlockLength_le_visibleHilbertCubeDimension
+          (a := a) hpos (N := N) (j := j) hden
+      have hRpos : 0 < (R : ℝ) := by
+        exact_mod_cast (lt_trans Nat.zero_lt_one hRgt1)
+      have hlogR_le_len :
+          Real.log (R : ℝ) ≤
+            Real.log (canonicalBlockLength a j : ℝ) :=
+        Real.log_le_log hRpos (by exact_mod_cast hRleLen)
+      have hlog_len_le :
+          Real.log (canonicalBlockLength a j : ℝ) ≤
+            ((Nat.log 2 (canonicalBlockLength a j) + 1 : ℕ) : ℝ) *
+              Real.log 2 :=
+        real_log_le_succ_natLog_mul_log_two hlen_ge
+      have hnat_succ_le :
+          ((Nat.log 2 (canonicalBlockLength a j) + 1 : ℕ) : ℝ)
+            ≤ (H : ℝ) + 1 := by
+        exact_mod_cast Nat.succ_le_succ hnatLog_le_H
+      have hlogR_le_H :
+          Real.log (R : ℝ) ≤ ((H : ℝ) + 1) * Real.log 2 := by
+        calc
+          Real.log (R : ℝ) ≤
+              Real.log (canonicalBlockLength a j : ℝ) := hlogR_le_len
+          _ ≤ ((Nat.log 2 (canonicalBlockLength a j) + 1 : ℕ) : ℝ) *
+              Real.log 2 := hlog_len_le
+          _ ≤ ((H : ℝ) + 1) * Real.log 2 :=
+            mul_le_mul_of_nonneg_right hnat_succ_le hlog2pos.le
+      have hdiv_log2 :
+          Real.log (R : ℝ) / Real.log 2 ≤ (H : ℝ) + 1 := by
+        exact (div_le_iff₀ hlog2pos).2 hlogR_le_H
+      have hdivN :
+          (Real.log (R : ℝ) / Real.log 2) /
+              Real.log (N : ℝ) ≤
+            ((H : ℝ) + 1) / Real.log (N : ℝ) :=
+        div_le_div_of_nonneg_right hdiv_log2 hlogNpos.le
+      have hswap :
+          (Real.log (R : ℝ) / Real.log (N : ℝ)) / Real.log 2 =
+            (Real.log (R : ℝ) / Real.log 2) /
+              Real.log (N : ℝ) := by
+        field_simp [hlog2pos.ne', hlogNpos.ne']
+      rw [hswap]
+      have hgoal :
+          (Real.log (R : ℝ) / Real.log 2) / Real.log (N : ℝ) -
+              1 / Real.log (N : ℝ) ≤
+            (H : ℝ) / Real.log (N : ℝ) := by
+        calc
+          (Real.log (R : ℝ) / Real.log 2) / Real.log (N : ℝ) -
+              1 / Real.log (N : ℝ)
+              ≤ ((H : ℝ) + 1) / Real.log (N : ℝ) -
+                  1 / Real.log (N : ℝ) :=
+            sub_le_sub_right hdivN _
+          _ = (H : ℝ) / Real.log (N : ℝ) := by ring
+      exact hgoal
+
+lemma canonicalBlockExponent_div_log_two_le_visibleHilbertCubeExponent
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1)) :
+    canonicalBlockExponent a / Real.log 2
+      ≤ visibleHilbertCubeExponent a := by
+  let F : ℕ → ℝ := fun N =>
+    Real.log (canonicalBlockGrowth a N : ℝ) / Real.log (N : ℝ)
+  let H : ℕ → ℝ := fun N =>
+    (properHilbertCubeDimension
+        (visibleCanonicalDenominatorSet a N) : ℝ) /
+      Real.log (N : ℝ)
+  have hFcobdd :
+      Filter.IsCoboundedUnder (fun x y : ℝ => x ≤ y) atTop F :=
+    Filter.IsCoboundedUnder.of_frequently_ge
+      ((canonicalBlockGrowth_ratio_nonneg_eventually a).frequently.mono
+        (fun N hN => by simpa [F] using hN))
+  have hHbdd :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop H :=
+    Filter.isBoundedUnder_of_eventually_le
+      (by
+        filter_upwards
+          [visibleHilbertCube_ratio_le_two_div_log_two_eventually
+            (a := a) hpos]
+          with N hN
+        simpa [H] using hN)
+  refine le_of_forall_lt ?_
+  intro C hC
+  let L : ℝ := limsup F atTop
+  have hlog2pos : 0 < Real.log 2 := Real.log_pos (by norm_num)
+  have hC' : C < L / Real.log 2 := by
+    simpa [canonicalBlockExponent, F, L] using hC
+  have hCLog_lt_L : C * Real.log 2 < L := by
+    have hmul := mul_lt_mul_of_pos_right hC' hlog2pos
+    field_simp [hlog2pos.ne'] at hmul
+    simpa [L, mul_comm] using hmul
+  let C₀ : ℝ := (C * Real.log 2 + L) / 2
+  have hCLog_C₀ : C * Real.log 2 < C₀ := by
+    dsimp [C₀]
+    nlinarith
+  have hC₀L : C₀ < L := by
+    dsimp [C₀]
+    nlinarith
+  have hC_lt_C₀div : C < C₀ / Real.log 2 := by
+    rw [lt_div_iff₀ hlog2pos]
+    exact hCLog_C₀
+  let D : ℝ := (C + C₀ / Real.log 2) / 2
+  have hCD : C < D := by
+    dsimp [D]
+    nlinarith
+  have hDlt : D < C₀ / Real.log 2 := by
+    dsimp [D]
+    nlinarith
+  have hgap : 0 < C₀ / Real.log 2 - D := by
+    nlinarith
+  have hfreqF : ∃ᶠ N : ℕ in atTop, C₀ < F N :=
+    Filter.frequently_lt_of_lt_limsup hFcobdd
+      (by simpa [L] using hC₀L)
+  have hsmall :
+      ∀ᶠ N : ℕ in atTop,
+        1 / Real.log (N : ℝ) < C₀ / Real.log 2 - D :=
+    (log_const_over_log_nat_tendsto_zero 1).eventually
+      (eventually_lt_nhds hgap)
+  have hlower :=
+    log_canonicalBlockGrowth_div_log_two_sub_inv_log_le_hilbertDimension
+      (a := a) hpos
+  have hfreqH : ∃ᶠ N : ℕ in atTop, D ≤ H N :=
+    (hfreqF.and_eventually (hsmall.and hlower)).mono (fun N hN => by
+      rcases hN with ⟨hFN, hsmallN, hlowerN⟩
+      have hFNdiv : C₀ / Real.log 2 < F N / Real.log 2 :=
+        div_lt_div_of_pos_right hFN hlog2pos
+      have hcalc : D ≤ F N / Real.log 2 -
+          1 / Real.log (N : ℝ) := by
+        nlinarith
+      exact hcalc.trans (by simpa [F, H] using hlowerN))
+  exact lt_of_lt_of_le hCD
+    (Filter.le_limsup_of_frequently_le hfreqH hHbdd)
+
+theorem visibleHilbertCubeExponent_eq_canonicalBlockExponent_div_log_two
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1)) :
+    visibleHilbertCubeExponent a =
+      canonicalBlockExponent a / Real.log 2 := by
+  exact le_antisymm
+    (visibleHilbertCubeExponent_le_canonicalBlockExponent_div_log_two hpos)
+    (canonicalBlockExponent_div_log_two_le_visibleHilbertCubeExponent hpos)
 
 /-- For Euler-pattern coefficients, the canonical block growth is
 sub-polynomial: `log R(N) / log N → 0`. -/

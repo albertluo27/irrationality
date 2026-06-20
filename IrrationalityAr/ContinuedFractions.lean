@@ -4908,6 +4908,64 @@ convergent witness.
 This is the strengthened version of `oddCFDenoms_subset_canonical_path`: it
 recovers the numerator attached to the canonical path denominator, not just the
 denominator itself. -/
+theorem pair_path_of_convergent_or_semiconvergent_of_IsSimpleCFExpansion
+    {α : ℝ} {a : ℕ → ℕ}
+    (hαpos : 0 < α)
+    (hαirr : IsIrrational α)
+    (hcf : IsSimpleCFExpansion α a)
+    {P Q : ℕ}
+    (hQ2 : 2 ≤ Q)
+    (hred : ReducedFraction P Q)
+    (hcf_any : IsConvergentOrSemiconvergent α P Q) :
+    ∃ n t : ℕ,
+      1 ≤ t ∧ t ≤ a (n + 1) ∧
+        P = continuantNumPrev a n + t * continuantNum a n ∧
+        Q = continuantDenPrev a n + t * continuantDen a n := by
+  have hbest : NoSmallDenominatorBetween α P Q :=
+    convergent_or_semiconvergent_no_small_denominator
+      hαpos hαirr hcf_any hred
+
+  rcases canonicalFiniteCF_exists hred hQ2 with ⟨e⟩
+
+  rcases CanonicalFiniteCF.head_ne_or_agreesThrough_or_firstDifference e a with
+    hhead | hagree | hdiff
+  · rcases smaller_denominator_between_of_head_ne hcf e hQ2 hhead with
+      ⟨c, d, hdpos, hdlt, hbetween⟩
+    exact False.elim ((hbest c d hdpos hdlt) hbetween)
+
+  · exact CFPathPair_of_agreesThrough hcf hred e hagree
+
+  · rcases hdiff with ⟨j, hdiffj⟩
+    rcases hdiffj with ⟨hj1, hjle, hprefix, hne⟩
+    have hdiffj' : e.FirstDifference a j :=
+      ⟨hj1, hjle, hprefix, hne⟩
+
+    rcases lt_or_gt_of_ne hne with hb_lt_ha | ha_lt_hb
+    · by_cases hjlast : j = e.last
+      · exact CFPathPair_of_firstDifference_last_lt
+          hcf hred e hdiffj' hjlast hb_lt_ha
+      · have hjlt : j < e.last := lt_of_le_of_ne hjle hjlast
+        rcases smaller_denominator_between_of_firstDifference_nonterminal_lt
+            hcf hred e hdiffj' hjlt hb_lt_ha with
+          ⟨c, d, hdpos, hdlt, hbetween⟩
+        exact False.elim ((hbest c d hdpos hdlt) hbetween)
+
+    · by_cases hjlast : j = e.last
+      · by_cases hsucc : e.coeff j = a j + 1
+        · exact CFPathPair_of_firstDifference_last_succ
+            hcf hred e hdiffj' hjlast hsucc
+        · have hlarge : a j + 1 < e.coeff j := by
+            omega
+          rcases smaller_denominator_between_of_firstDifference_last_large
+              hcf hred e hdiffj' hjlast hlarge with
+            ⟨c, d, hdpos, hdlt, hbetween⟩
+          exact False.elim ((hbest c d hdpos hdlt) hbetween)
+      · have hjlt : j < e.last := lt_of_le_of_ne hjle hjlast
+        rcases smaller_denominator_between_of_firstDifference_nonterminal_gt
+            hcf hred e hdiffj' hjlt ha_lt_hb with
+          ⟨c, d, hdpos, hdlt, hbetween⟩
+        exact False.elim ((hbest c d hdpos hdlt) hbetween)
+
 private theorem canonical_pair_path_of_convergent_or_semiconvergent
     {α : ℝ}
     (hαpos : 0 < α)
@@ -4923,54 +4981,11 @@ private theorem canonical_pair_path_of_convergent_or_semiconvergent
         Q = continuantDenPrev (simplePartialQuotient α) n +
               t * continuantDen (simplePartialQuotient α) n := by
   let a : ℕ → ℕ := simplePartialQuotient α
-
   have hcf : IsSimpleCFExpansion α a := by
     simpa [a] using simplePartialQuotient_isSimpleCFExpansion hαpos hαirr
-
-  have hbest : NoSmallDenominatorBetween α P Q :=
-    convergent_or_semiconvergent_no_small_denominator
-      hαpos hαirr hcf_any hred
-
-  rcases canonicalFiniteCF_exists hred hQ2 with ⟨e⟩
-
-  rcases CanonicalFiniteCF.head_ne_or_agreesThrough_or_firstDifference e a with
-    hhead | hagree | hdiff
-  · rcases smaller_denominator_between_of_head_ne hcf e hQ2 hhead with
-      ⟨c, d, hdpos, hdlt, hbetween⟩
-    exact False.elim ((hbest c d hdpos hdlt) hbetween)
-
-  · simpa [a] using CFPathPair_of_agreesThrough hcf hred e hagree
-
-  · rcases hdiff with ⟨j, hdiffj⟩
-    rcases hdiffj with ⟨hj1, hjle, hprefix, hne⟩
-    have hdiffj' : e.FirstDifference a j :=
-      ⟨hj1, hjle, hprefix, hne⟩
-
-    rcases lt_or_gt_of_ne hne with hb_lt_ha | ha_lt_hb
-    · by_cases hjlast : j = e.last
-      · simpa [a] using CFPathPair_of_firstDifference_last_lt
-          hcf hred e hdiffj' hjlast hb_lt_ha
-      · have hjlt : j < e.last := lt_of_le_of_ne hjle hjlast
-        rcases smaller_denominator_between_of_firstDifference_nonterminal_lt
-            hcf hred e hdiffj' hjlt hb_lt_ha with
-          ⟨c, d, hdpos, hdlt, hbetween⟩
-        exact False.elim ((hbest c d hdpos hdlt) hbetween)
-
-    · by_cases hjlast : j = e.last
-      · by_cases hsucc : e.coeff j = a j + 1
-        · simpa [a] using CFPathPair_of_firstDifference_last_succ
-            hcf hred e hdiffj' hjlast hsucc
-        · have hlarge : a j + 1 < e.coeff j := by
-            omega
-          rcases smaller_denominator_between_of_firstDifference_last_large
-              hcf hred e hdiffj' hjlast hlarge with
-            ⟨c, d, hdpos, hdlt, hbetween⟩
-          exact False.elim ((hbest c d hdpos hdlt) hbetween)
-      · have hjlt : j < e.last := lt_of_le_of_ne hjle hjlast
-        rcases smaller_denominator_between_of_firstDifference_nonterminal_gt
-            hcf hred e hdiffj' hjlt ha_lt_hb with
-          ⟨c, d, hdpos, hdlt, hbetween⟩
-        exact False.elim ((hbest c d hdpos hdlt) hbetween)
+  simpa [a] using
+    pair_path_of_convergent_or_semiconvergent_of_IsSimpleCFExpansion
+      hαpos hαirr hcf hQ2 hred hcf_any
 
 /-- The canonical coefficient sequence recovers the numerator-denominator pair
 for any parity-selected principal/intermediate denominator witness. -/
@@ -5156,6 +5171,14 @@ private theorem pathPair_reduced
     exact_mod_cast hdenR'
   refine ⟨hden, ?_⟩
   simpa [add_comm, mul_comm, one_mul] using hcop
+
+/-- Principal/intermediate path pairs are reduced. -/
+theorem reducedFraction_pathPair
+    (a : ℕ → ℕ) {n t : ℕ} (ht : 1 ≤ t) :
+    ReducedFraction
+      (continuantNumPrev a n + t * continuantNum a n)
+      (continuantDenPrev a n + t * continuantDen a n) :=
+  pathPair_reduced a ht
 
 private theorem mem_oddCFDenoms_of_canonical_path_odd
     {α : ℝ} {a : ℕ → ℕ}
