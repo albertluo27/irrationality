@@ -8,6 +8,7 @@ import IrrationalityAr.Characterization
 import IrrationalityAr.ContinuedFractions
 import IrrationalityAr.CanonicalBlocks
 import IrrationalityAr.CanonicalBlockGrowth
+import IrrationalityAr.ReciprocalBlockDuality
 import IrrationalityAr.AdditiveBlockBridge
 import IrrationalityAr.CanonicalEntropyDissociation
 import IrrationalityAr.CanonicalEntropyDissociationCFBridge
