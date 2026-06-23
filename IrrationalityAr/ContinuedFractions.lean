@@ -810,29 +810,6 @@ private theorem rat_not_int_of_not_dvd {p q k : ℕ}
     exact_mod_cast hdvdZ
   exact hnot hdvdNat
 
-private theorem mul_irrational_not_int {α : ℝ} (hirr : IsIrrational α)
-    {k : ℕ} (hkpos : 0 < k) :
-    ∀ m : ℤ, (k : ℝ) * α ≠ (m : ℝ) := by
-  intro m hm
-  apply hirr
-  refine ⟨(m : ℚ) / (k : ℚ), ?_⟩
-  have hkR : (k : ℝ) ≠ 0 := by exact_mod_cast Nat.ne_of_gt hkpos
-  have hcast : (((m : ℚ) / (k : ℚ) : ℚ) : ℝ) =
-      (m : ℝ) / (k : ℝ) := by norm_num
-  rw [hcast]
-  rw [div_eq_iff hkR]
-  rw [← hm]
-  ring
-
-private theorem floor_lt_of_not_int {x : ℝ}
-    (hnot : ∀ m : ℤ, x ≠ (m : ℝ)) :
-    (Int.floor x : ℝ) < x := by
-  have hle : (Int.floor x : ℝ) ≤ x := Int.floor_le x
-  have hne : (Int.floor x : ℝ) ≠ x := by
-    intro h
-    exact hnot (Int.floor x) h.symm
-  exact lt_of_le_of_ne hle hne
-
 private theorem rat_not_int_of_coprime {p q k : ℕ}
     (hq : 0 < q) (hpq : Nat.Coprime p q) (hkpos : 0 < k) (hklt : k < q) :
     ∀ m : ℤ, ((k : ℝ) * (p : ℝ)) / (q : ℝ) ≠ (m : ℝ) := by
@@ -5146,7 +5123,8 @@ private theorem simplePartialQuotient_zero_eq_one_of_mem_Icc
     constructor <;> linarith
   simp [hfloor]
 
-private theorem pathPair_reduced
+/-- Principal/intermediate path pairs are reduced. -/
+theorem reducedFraction_pathPair
     (a : ℕ → ℕ) {n t : ℕ} (ht : 1 ≤ t) :
     ReducedFraction
       (continuantNumPrev a n + t * continuantNum a n)
@@ -5173,14 +5151,6 @@ private theorem pathPair_reduced
   refine ⟨hden, ?_⟩
   simpa [add_comm, mul_comm, one_mul] using hcop
 
-/-- Principal/intermediate path pairs are reduced. -/
-theorem reducedFraction_pathPair
-    (a : ℕ → ℕ) {n t : ℕ} (ht : 1 ≤ t) :
-    ReducedFraction
-      (continuantNumPrev a n + t * continuantNum a n)
-      (continuantDenPrev a n + t * continuantDen a n) :=
-  pathPair_reduced a ht
-
 private theorem mem_oddCFDenoms_of_canonical_path_odd
     {α : ℝ} {a : ℕ → ℕ}
     (hcf : IsSimpleCFExpansion α a)
@@ -5198,7 +5168,7 @@ private theorem mem_oddCFDenoms_of_canonical_path_odd
     (Q := continuantDenPrev a n + t * continuantDen a n)
     hcf ?_ hQ2 ?_
   · refine ⟨n, t, ht1, htle, rfl, rfl, hodd⟩
-  · exact pathPair_reduced a ht1
+  · exact reducedFraction_pathPair a ht1
 
 private theorem continuantNum_eq_of_eq_on_prefix {a b : ℕ → ℕ} :
     ∀ n : ℕ,

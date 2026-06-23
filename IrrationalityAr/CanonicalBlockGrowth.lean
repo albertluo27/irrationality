@@ -1,4 +1,4 @@
-import IrrationalityAr.Blocks.Visible
+import IrrationalityAr.CanonicalBlocks
 import IrrationalityAr.AdditiveBlockBridge
 import Mathlib.Analysis.SpecialFunctions.Log.Basic
 import Mathlib.Analysis.SpecialFunctions.Log.Base
@@ -81,6 +81,21 @@ case `tau = ∞`. -/
 def partialQuotientGrowthUnbounded (a : ℕ → ℕ) : Prop :=
   ∀ C : ℝ, ∃ᶠ j : ℕ in atTop, C ≤ pqLogRatio a j
 
+theorem partialQuotientGrowthUnbounded_of_not_isBoundedUnder
+    {a : ℕ → ℕ}
+    (hnot :
+      ¬ Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop
+        (pqLogRatio a)) :
+    partialQuotientGrowthUnbounded a := by
+  intro C
+  by_contra hfreq
+  apply hnot
+  have hev_not :
+      ∀ᶠ j : ℕ in atTop, ¬ C ≤ pqLogRatio a j :=
+    Filter.not_frequently.mp hfreq
+  exact Filter.isBoundedUnder_of_eventually_le (a := C) <|
+    hev_not.mono fun _ hnotle => le_of_lt (lt_of_not_ge hnotle)
+
 /-- The endpoint partial-quotient logarithmic growth ratio
 `y_j = log(a_{j+1}) / log(q_{j+1})`. -/
 noncomputable def pqEndpointLogRatio (a : ℕ → ℕ) (j : ℕ) : ℝ :=
@@ -144,8 +159,152 @@ def HasIrrationalityMeasure (α μ : ℝ) : Prop :=
       μ < ν →
         ∀ᶠ q : ℕ in atTop,
           ∀ p : ℤ,
-            0 < q →
+          0 < q →
               ¬ |α - (p : ℝ) / (q : ℝ)| < (q : ℝ) ^ (-ν))
+
+/-- The literal irrationality-measure predicate has at most one value. -/
+theorem HasIrrationalityMeasure_unique
+    {α μ ν : ℝ}
+    (hμ : HasIrrationalityMeasure α μ)
+    (hν : HasIrrationalityMeasure α ν) :
+    μ = ν := by
+  rcases lt_trichotomy μ ν with hlt | heq | hgt
+  · exfalso
+    let η : ℝ := (μ + ν) / 2
+    have hμη : μ < η := by
+      dsimp [η]
+      linarith
+    have hην : η < ν := by
+      dsimp [η]
+      linarith
+    rcases hμ with ⟨_, hμupper⟩
+    rcases hν with ⟨hνlower, _⟩
+    have hfreq : ∃ᶠ q : ℕ in atTop,
+        ∃ p : ℤ,
+          0 < q ∧
+            |α - (p : ℝ) / (q : ℝ)| < (q : ℝ) ^ (-η) :=
+      hνlower η hην
+    have hevent : ∀ᶠ q : ℕ in atTop,
+        ∀ p : ℤ,
+        0 < q →
+            ¬ |α - (p : ℝ) / (q : ℝ)| < (q : ℝ) ^ (-η) :=
+      hμupper η hμη
+    have hfalse : ∃ᶠ q : ℕ in atTop, False :=
+      (hfreq.and_eventually hevent).mono fun _ hq => by
+        rcases hq with ⟨⟨p, hqpos, hlt⟩, hbad⟩
+        exact hbad p hqpos hlt
+    exact (Filter.frequently_false atTop) hfalse
+  · exact heq
+  · exfalso
+    let η : ℝ := (μ + ν) / 2
+    have hνη : ν < η := by
+      dsimp [η]
+      linarith
+    have hημ : η < μ := by
+      dsimp [η]
+      linarith
+    rcases hμ with ⟨hμlower, _⟩
+    rcases hν with ⟨_, hνupper⟩
+    have hfreq : ∃ᶠ q : ℕ in atTop,
+        ∃ p : ℤ,
+          0 < q ∧
+            |α - (p : ℝ) / (q : ℝ)| < (q : ℝ) ^ (-η) :=
+      hμlower η hημ
+    have hevent : ∀ᶠ q : ℕ in atTop,
+        ∀ p : ℤ,
+        0 < q →
+            ¬ |α - (p : ℝ) / (q : ℝ)| < (q : ℝ) ^ (-η) :=
+      hνupper η hνη
+    have hfalse : ∃ᶠ q : ℕ in atTop, False :=
+      (hfreq.and_eventually hevent).mono fun _ hq => by
+        rcases hq with ⟨⟨p, hqpos, hlt⟩, hbad⟩
+        exact hbad p hqpos hlt
+    exact (Filter.frequently_false atTop) hfalse
+
+private lemma abs_add_int_sub_div_add_mul_eq
+    (α : ℝ) (k p : ℤ) {q : ℕ} (hq : 0 < q) :
+    |(α + (k : ℝ)) -
+        ((p + k * (q : ℤ) : ℤ) : ℝ) / (q : ℝ)| =
+      |α - (p : ℝ) / (q : ℝ)| := by
+  have hqR : (q : ℝ) ≠ 0 := by exact_mod_cast Nat.ne_of_gt hq
+  apply congrArg abs
+  field_simp [hqR]
+  rw [Int.cast_add, Int.cast_mul, Int.cast_natCast]
+  ring
+
+private lemma abs_add_int_sub_div_eq_sub_mul
+    (α : ℝ) (k p : ℤ) {q : ℕ} (hq : 0 < q) :
+    |(α + (k : ℝ)) - (p : ℝ) / (q : ℝ)| =
+      |α - ((p - k * (q : ℤ) : ℤ) : ℝ) / (q : ℝ)| := by
+  have hqR : (q : ℝ) ≠ 0 := by exact_mod_cast Nat.ne_of_gt hq
+  apply congrArg abs
+  field_simp [hqR]
+  rw [Int.cast_sub, Int.cast_mul, Int.cast_natCast]
+  ring
+
+private lemma abs_neg_sub_div_neg_eq
+    (α : ℝ) (p : ℤ) (q : ℕ) :
+    |(-α) - ((-p : ℤ) : ℝ) / (q : ℝ)| =
+      |α - (p : ℝ) / (q : ℝ)| := by
+  have h :
+      (-α) - ((-p : ℤ) : ℝ) / (q : ℝ) =
+        -(α - (p : ℝ) / (q : ℝ)) := by
+    simp
+    ring
+  rw [h, abs_neg]
+
+private lemma abs_neg_sub_div_eq_neg
+    (α : ℝ) (p : ℤ) (q : ℕ) :
+    |(-α) - (p : ℝ) / (q : ℝ)| =
+      |α - ((-p : ℤ) : ℝ) / (q : ℝ)| := by
+  have h :
+      (-α) - (p : ℝ) / (q : ℝ) =
+        -(α - ((-p : ℤ) : ℝ) / (q : ℝ)) := by
+    simp
+    ring
+  rw [h, abs_neg]
+
+theorem HasIrrationalityMeasure.add_int
+    {α μ : ℝ} (hμ : HasIrrationalityMeasure α μ) (k : ℤ) :
+    HasIrrationalityMeasure (α + (k : ℝ)) μ := by
+  rcases hμ with ⟨hlower, hupper⟩
+  constructor
+  · intro ν hν
+    exact (hlower ν hν).mono fun q hq => by
+      rcases hq with ⟨p, hqpos, hlt⟩
+      refine ⟨p + k * (q : ℤ), hqpos, ?_⟩
+      rwa [abs_add_int_sub_div_add_mul_eq α k p hqpos]
+  · intro ν hν
+    filter_upwards [hupper ν hν] with q hbad p hqpos
+    intro hlt
+    exact hbad (p - k * (q : ℤ)) hqpos <| by
+      rwa [← abs_add_int_sub_div_eq_sub_mul α k p hqpos]
+
+theorem HasIrrationalityMeasure.neg
+    {α μ : ℝ} (hμ : HasIrrationalityMeasure α μ) :
+    HasIrrationalityMeasure (-α) μ := by
+  rcases hμ with ⟨hlower, hupper⟩
+  constructor
+  · intro ν hν
+    exact (hlower ν hν).mono fun q hq => by
+      rcases hq with ⟨p, hqpos, hlt⟩
+      refine ⟨-p, hqpos, ?_⟩
+      rwa [abs_neg_sub_div_neg_eq α p q]
+  · intro ν hν
+    filter_upwards [hupper ν hν] with q hbad p hqpos
+    intro hlt
+    exact hbad (-p) hqpos <| by
+      rwa [← abs_neg_sub_div_eq_neg α p q]
+
+theorem HasIrrationalityMeasure.sub_int
+    {α μ : ℝ} (hμ : HasIrrationalityMeasure α μ) (k : ℤ) :
+    HasIrrationalityMeasure (α - (k : ℝ)) μ := by
+  simpa [sub_eq_add_neg] using hμ.add_int (-k)
+
+theorem HasIrrationalityMeasure.neg_add_int
+    {α μ : ℝ} (hμ : HasIrrationalityMeasure α μ) (k : ℤ) :
+    HasIrrationalityMeasure (-α + (k : ℝ)) μ :=
+  hμ.neg.add_int k
 
 lemma eventually_nat_cast_pos_atTop :
     ∀ᶠ q : ℕ in atTop, (0 : ℝ) < q := by
@@ -613,6 +772,43 @@ noncomputable def visibleFloorSumASet (r : ℝ) (N : ℕ) : Finset ℕ := by
   unfold visibleFloorSumASet
   rw [Finset.mem_filter, Finset.mem_range, Nat.lt_iff_add_one_le]
 
+theorem visibleFloorSumASet_congr
+    {α β : ℝ}
+    (hA : A β = A α)
+    (N : ℕ) :
+    visibleFloorSumASet β N = visibleFloorSumASet α N := by
+  classical
+  ext n
+  simp [hA]
+
+/-- Finite truncation `A_r ∩ [1,N]` used in the public theorem statement. -/
+noncomputable def floorSumATruncIcc (r : ℝ) (N : ℕ) : Finset ℕ := by
+  classical
+  exact (Finset.Icc 1 N).filter fun n : ℕ => n ∈ A r
+
+@[simp] theorem mem_floorSumATruncIcc_iff
+    {r : ℝ} {N n : ℕ} :
+    n ∈ floorSumATruncIcc r N ↔ 1 ≤ n ∧ n ≤ N ∧ n ∈ A r := by
+  classical
+  unfold floorSumATruncIcc
+  rw [Finset.mem_filter, Finset.mem_Icc]
+  simp [and_assoc]
+
+/-- The statement-style truncation `A_r ∩ [1,N]` is the existing denominator
+truncation at cap `N+1`.  The only extra element in `range (N+1)` would be
+`0`, and `0 ∉ A_r`. -/
+theorem floorSumATruncIcc_eq_visibleFloorSumASet_succ
+    (r : ℝ) (N : ℕ) :
+    floorSumATruncIcc r N = visibleFloorSumASet r (N + 1) := by
+  classical
+  ext n
+  rw [mem_floorSumATruncIcc_iff, mem_visibleFloorSumASet_iff]
+  constructor
+  · rintro ⟨hn1, hnN, hnA⟩
+    exact ⟨by omega, hnA⟩
+  · rintro ⟨hnN, hnA⟩
+    exact ⟨Nat.succ_le_of_lt (mem_A_iff.mp hnA).1, by omega, hnA⟩
+
 noncomputable def floorSumAPopularDifferenceExponent (r : ℝ) : ℝ :=
   limsup
     (fun N : ℕ =>
@@ -628,6 +824,25 @@ noncomputable def floorSumAAdditiveEnergyExponent (r : ℝ) : ℝ :=
         (additiveEnergy (visibleFloorSumASet r N) : ℝ) /
         Real.log (N : ℝ))
     atTop
+
+/-- Additive-energy exponent for the public truncation `A r ∩ [1,N]`. -/
+noncomputable def floorSumATruncIccAdditiveEnergyExponent (r : ℝ) : ℝ :=
+  limsup
+    (fun N : ℕ =>
+      Real.log
+        (additiveEnergy (floorSumATruncIcc r N) : ℝ) /
+        Real.log (N : ℝ))
+    atTop
+
+theorem floorSumAAdditiveEnergyExponent_congr
+    {α β : ℝ}
+    (hA : A β = A α) :
+    floorSumAAdditiveEnergyExponent β =
+      floorSumAAdditiveEnergyExponent α := by
+  unfold floorSumAAdditiveEnergyExponent
+  congr
+  ext N
+  rw [visibleFloorSumASet_congr hA N]
 
 noncomputable def floorSumAHilbertCubeExponent (r : ℝ) : ℝ :=
   limsup
@@ -2673,6 +2888,38 @@ theorem visibleCanonicalDenominatorSet_erase_zero_eq_visibleFloorSumASet
       (oddBlockASetTrunc_eq_visibleFloorSumASet_of_IsSimpleCFExpansion
         hαpos hαirr hcf N)
 
+/-- Pointwise visible-block additive-energy upper bound for the public
+truncation `A α ∩ [1,N]`.
+
+The denominator cap is `N + 1`: an element `n ≤ N` of the floor-sum set
+corresponds to a continued-fraction denominator `n + 1 ≤ N + 1`. -/
+theorem floorSumATruncIcc_additiveEnergy_le_visibleCanonicalBlockMax
+    {α : ℝ} {a : ℕ → ℕ}
+    (hαpos : 0 < α)
+    (hαirr : IsIrrational α)
+    (hcf : IsSimpleCFExpansion α a)
+    (N : ℕ) :
+    additiveEnergy (floorSumATruncIcc α N)
+      ≤ ((2 * Nat.log 2 (N + 1) + 3) *
+          visibleCanonicalBlockMax a (N + 1)) ^ 3 := by
+  rw [floorSumATruncIcc_eq_visibleFloorSumASet_succ]
+  have hcanon :
+      (visibleCanonicalDenominatorSet a (N + 1)).erase 0 =
+        visibleFloorSumASet α (N + 1) :=
+    visibleCanonicalDenominatorSet_erase_zero_eq_visibleFloorSumASet
+      hαpos hαirr hcf (N + 1)
+  have hsub :
+      visibleFloorSumASet α (N + 1) ⊆
+        visibleCanonicalDenominatorSet a (N + 1) := by
+    intro n hn
+    have hnerase :
+        n ∈ (visibleCanonicalDenominatorSet a (N + 1)).erase 0 := by
+      rw [hcanon]
+      exact hn
+    exact (Finset.mem_erase.mp hnerase).2
+  exact (additiveEnergy_mono hsub).trans
+    (visibleCanonical_additive_upper_bridge (a := a) hcf.1 (N + 1)).2.1
+
 /-- Every non-initial block denominator is at least `2`. -/
 lemma two_le_CFBlockDenominator_of_one_le_index
     {a : ℕ → ℕ}
@@ -3082,6 +3329,30 @@ lemma pqLogRatio_nonneg_eventually
   have hlogq_nonneg : 0 ≤ Real.log (continuantDen a n : ℝ) :=
     (Real.log_pos (by exact_mod_cast hqgt1n)).le
   exact div_nonneg hlogA_nonneg hlogq_nonneg
+
+theorem partialQuotientGrowthTau_nonneg_of_bounded
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1))
+    (hbounded :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop
+        (pqLogRatio a)) :
+    0 ≤ partialQuotientGrowthTau a := by
+  exact
+    Filter.le_limsup_of_frequently_le
+      (pqLogRatio_nonneg_eventually hpos).frequently hbounded
+
+theorem one_add_partialQuotientGrowthTau_ne_zero_of_bounded
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1))
+    (hbounded :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop
+        (pqLogRatio a)) :
+    1 + partialQuotientGrowthTau a ≠ 0 := by
+  have htau_nonneg :
+      0 ≤ partialQuotientGrowthTau a :=
+    partialQuotientGrowthTau_nonneg_of_bounded hpos hbounded
+  intro hzero
+  linarith
 
 lemma pqLogRatioTransform_nonneg_eventually
     {a : ℕ → ℕ}
@@ -3680,6 +3951,61 @@ lemma limsup_eq_of_sub_tendsto_zero_of_eventually_bounded
     simpa [hliminf_d] using h
   exact le_antisymm hupper hlower
 
+lemma limsup_eq_of_sub_tendsto_zero_of_eventually_bounded_above
+    {u v : ℕ → ℝ} {C : ℝ}
+    (hsub : Tendsto (fun n : ℕ => u n - v n) atTop (𝓝 0))
+    (hv_nonneg : ∀ᶠ n : ℕ in atTop, 0 ≤ v n)
+    (hv_le : ∀ᶠ n : ℕ in atTop, v n ≤ C) :
+    limsup u atTop = limsup v atTop := by
+  let d : ℕ → ℝ := fun n : ℕ => u n - v n
+  have hd : Tendsto d atTop (𝓝 0) := by
+    simpa [d] using hsub
+  have hd_le_one : ∀ᶠ n : ℕ in atTop, d n ≤ 1 :=
+    hd.eventually (eventually_le_nhds (by norm_num : (0 : ℝ) < 1))
+  have hneg_one_le_hd : ∀ᶠ n : ℕ in atTop, (-1 : ℝ) ≤ d n :=
+    hd.eventually (eventually_ge_nhds (by norm_num : (-1 : ℝ) < 0))
+  have hv_bdd_above :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop v :=
+    Filter.isBoundedUnder_of_eventually_le hv_le
+  have hv_bdd_below :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≥ y) atTop v :=
+    Filter.isBoundedUnder_of_eventually_ge hv_nonneg
+  have hv_cobdd_below :
+      Filter.IsCoboundedUnder (fun x y : ℝ => x ≤ y) atTop v :=
+    Filter.IsCoboundedUnder.of_frequently_ge hv_nonneg.frequently
+  have hd_bdd_above :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop d :=
+    Filter.isBoundedUnder_of_eventually_le hd_le_one
+  have hd_bdd_below :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≥ y) atTop d :=
+    Filter.isBoundedUnder_of_eventually_ge hneg_one_le_hd
+  have hd_cobdd_below :
+      Filter.IsCoboundedUnder (fun x y : ℝ => x ≤ y) atTop d :=
+    Filter.IsCoboundedUnder.of_frequently_ge hneg_one_le_hd.frequently
+  have hlimsup_d : limsup d atTop = 0 := hd.limsup_eq
+  have hliminf_d : liminf d atTop = 0 := hd.liminf_eq
+  have hu_eq :
+      limsup u atTop = limsup (fun n : ℕ => v n + d n) atTop := by
+    refine Filter.limsup_congr ?_
+    exact Filter.Eventually.of_forall (fun n => by
+      dsimp [d]
+      ring)
+  have hupper : limsup u atTop ≤ limsup v atTop := by
+    rw [hu_eq]
+    have h :=
+      limsup_add_le
+        (u := v) (v := d) (f := atTop)
+        hv_bdd_below hv_bdd_above hd_cobdd_below hd_bdd_above
+    simpa [hlimsup_d] using h
+  have hlower : limsup v atTop ≤ limsup u atTop := by
+    rw [hu_eq]
+    have h :=
+      le_limsup_add
+        (u := v) (v := d) (f := atTop)
+        hv_bdd_above hv_cobdd_below hd_bdd_above hd_bdd_below
+    simpa [hliminf_d] using h
+  exact le_antisymm hupper hlower
+
 lemma safeBlock_partialQuotient_endpoint_ratio_sub_tendsto_zero
     {a : ℕ → ℕ}
     (hpos : ∀ n : ℕ, 0 < a (n + 1)) :
@@ -3814,6 +4140,50 @@ private lemma tendsto_log_div_self_atTop :
         simpa [id] using hx
       simp [hx0])).mp Real.isLittleO_log_id_atTop
   simpa [Function.comp_def, id] using h
+
+lemma log_nat_succ_div_log_tendsto_one :
+    Tendsto
+      (fun N : ℕ =>
+        Real.log ((N + 1 : ℕ) : ℝ) / Real.log (N : ℝ))
+      atTop (𝓝 1) := by
+  have hdiff_real :
+      Tendsto
+        (fun N : ℕ =>
+          Real.log ((N : ℝ) + 1) - Real.log (N : ℝ))
+        atTop (𝓝 0) :=
+    Real.tendsto_log_nat_add_one_sub_log
+  have hdiff :
+      Tendsto
+        (fun N : ℕ =>
+          Real.log ((N + 1 : ℕ) : ℝ) - Real.log (N : ℝ))
+        atTop (𝓝 0) := by
+    refine hdiff_real.congr' ?_
+    exact Filter.Eventually.of_forall fun N => by
+      simp [Nat.cast_add]
+  have hden :
+      Tendsto (fun N : ℕ => Real.log (N : ℝ)) atTop atTop :=
+    Real.tendsto_log_atTop.comp tendsto_natCast_atTop_atTop
+  have hquot :
+      Tendsto
+        (fun N : ℕ =>
+          (Real.log ((N + 1 : ℕ) : ℝ) - Real.log (N : ℝ)) /
+            Real.log (N : ℝ))
+        atTop (𝓝 0) :=
+    hdiff.div_atTop hden
+  have hmain :
+      Tendsto
+        (fun N : ℕ =>
+          1 +
+            (Real.log ((N + 1 : ℕ) : ℝ) - Real.log (N : ℝ)) /
+              Real.log (N : ℝ))
+        atTop (𝓝 1) := by
+    simpa using hquot.const_add 1
+  refine hmain.congr' ?_
+  filter_upwards [eventually_ge_atTop 2] with N hN
+  have hlogN : Real.log (N : ℝ) ≠ 0 := by
+    exact (Real.log_pos (by exact_mod_cast hN)).ne'
+  field_simp [hlogN]
+  ring
 
 private lemma isBigO_log_affine_log_atTop {c d : ℝ} (hc : 0 < c) :
     (fun x : ℝ => Real.log (c * x + d)) =O[atTop] Real.log := by
@@ -4729,6 +5099,128 @@ lemma floorSumAAdditiveEnergy_ratio_le_three_eventually
     rw [hright] at hdiv
     simpa [E] using hdiv
 
+lemma floorSumATruncIcc_ratio_sub_visible_succ_ratio_tendsto_zero
+    (r : ℝ) :
+    Tendsto
+      (fun N : ℕ =>
+        Real.log
+            (additiveEnergy (floorSumATruncIcc r N) : ℝ) /
+            Real.log (N : ℝ) -
+          Real.log
+            (additiveEnergy (visibleFloorSumASet r (N + 1)) : ℝ) /
+            Real.log ((N + 1 : ℕ) : ℝ))
+      atTop (𝓝 0) := by
+  let S : ℕ → ℝ := fun N : ℕ =>
+    Real.log
+        (additiveEnergy (visibleFloorSumASet r (N + 1)) : ℝ) /
+      Real.log ((N + 1 : ℕ) : ℝ)
+  let C : ℕ → ℝ := fun N : ℕ =>
+    Real.log ((N + 1 : ℕ) : ℝ) / Real.log (N : ℝ)
+  have hC :
+      Tendsto (fun N : ℕ => C N - 1) atTop (𝓝 0) := by
+    simpa [C] using
+      log_nat_succ_div_log_tendsto_one.sub
+        (tendsto_const_nhds (x := (1 : ℝ)))
+  have hCabs :
+      Tendsto (fun N : ℕ => |C N - 1|) atTop (𝓝 0) :=
+    (tendsto_zero_iff_abs_tendsto_zero _).1 hC
+  have hbound :
+      Tendsto (fun N : ℕ => 3 * |C N - 1|) atTop (𝓝 0) := by
+    simpa using hCabs.const_mul (3 : ℝ)
+  have hSnonneg : ∀ᶠ N : ℕ in atTop, 0 ≤ S N := by
+    simpa [S] using
+      (tendsto_add_atTop_nat 1).eventually
+        (floorSumAAdditiveEnergy_ratio_nonneg_eventually r)
+  have hSle : ∀ᶠ N : ℕ in atTop, S N ≤ 3 := by
+    simpa [S] using
+      (tendsto_add_atTop_nat 1).eventually
+        (floorSumAAdditiveEnergy_ratio_le_three_eventually r)
+  have habs_tendsto :
+      Tendsto
+        (fun N : ℕ =>
+          |Real.log
+                (additiveEnergy (floorSumATruncIcc r N) : ℝ) /
+                Real.log (N : ℝ) -
+              Real.log
+                (additiveEnergy (visibleFloorSumASet r (N + 1)) : ℝ) /
+                Real.log ((N + 1 : ℕ) : ℝ)|)
+        atTop (𝓝 0) := by
+    refine squeeze_zero'
+      (f := fun N : ℕ =>
+        |Real.log
+              (additiveEnergy (floorSumATruncIcc r N) : ℝ) /
+              Real.log (N : ℝ) -
+            Real.log
+              (additiveEnergy (visibleFloorSumASet r (N + 1)) : ℝ) /
+              Real.log ((N + 1 : ℕ) : ℝ)|)
+      (g := fun N : ℕ => 3 * |C N - 1|)
+      ?hnonneg ?hle hbound
+    · exact Filter.Eventually.of_forall fun N => abs_nonneg _
+    · filter_upwards [eventually_ge_atTop 2, hSnonneg, hSle]
+        with N hN hSN_nonneg hSN_le
+      have hfloor :
+          additiveEnergy (floorSumATruncIcc r N) =
+            additiveEnergy (visibleFloorSumASet r (N + 1)) := by
+        rw [floorSumATruncIcc_eq_visibleFloorSumASet_succ]
+      have hlogN : Real.log (N : ℝ) ≠ 0 := by
+        exact (Real.log_pos (by exact_mod_cast hN)).ne'
+      have hlogNp1 : Real.log ((N + 1 : ℕ) : ℝ) ≠ 0 := by
+        have hNp1 : (1 : ℝ) < ((N + 1 : ℕ) : ℝ) := by
+          exact_mod_cast (by omega : 1 < N + 1)
+        exact (Real.log_pos hNp1).ne'
+      have hrewrite :
+          Real.log
+              (additiveEnergy (floorSumATruncIcc r N) : ℝ) /
+              Real.log (N : ℝ) -
+            Real.log
+              (additiveEnergy (visibleFloorSumASet r (N + 1)) : ℝ) /
+              Real.log ((N + 1 : ℕ) : ℝ)
+            =
+          S N * (C N - 1) := by
+        dsimp [S, C]
+        rw [hfloor]
+        field_simp [hlogN, hlogNp1]
+      rw [hrewrite, abs_mul, abs_of_nonneg hSN_nonneg]
+      exact mul_le_mul_of_nonneg_right hSN_le (abs_nonneg _)
+  exact (tendsto_zero_iff_abs_tendsto_zero _).2 habs_tendsto
+
+theorem floorSumATruncIccAdditiveEnergyExponent_eq_floorSumAAdditiveEnergyExponent
+    (r : ℝ) :
+    floorSumATruncIccAdditiveEnergyExponent r =
+      floorSumAAdditiveEnergyExponent r := by
+  let H : ℕ → ℝ := fun N : ℕ =>
+    Real.log
+        (additiveEnergy (floorSumATruncIcc r N) : ℝ) /
+      Real.log (N : ℝ)
+  let G : ℕ → ℝ := fun N : ℕ =>
+    Real.log
+        (additiveEnergy (visibleFloorSumASet r N) : ℝ) /
+      Real.log (N : ℝ)
+  let S : ℕ → ℝ := fun N : ℕ => G (N + 1)
+  have hsub : Tendsto (fun N : ℕ => H N - S N) atTop (𝓝 0) := by
+    simpa [H, G, S] using
+      floorSumATruncIcc_ratio_sub_visible_succ_ratio_tendsto_zero r
+  have hSnonneg : ∀ᶠ N : ℕ in atTop, 0 ≤ S N := by
+    simpa [G, S] using
+      (tendsto_add_atTop_nat 1).eventually
+        (floorSumAAdditiveEnergy_ratio_nonneg_eventually r)
+  have hSle : ∀ᶠ N : ℕ in atTop, S N ≤ 3 := by
+    simpa [G, S] using
+      (tendsto_add_atTop_nat 1).eventually
+        (floorSumAAdditiveEnergy_ratio_le_three_eventually r)
+  have hHS : limsup H atTop = limsup S atTop :=
+    limsup_eq_of_sub_tendsto_zero_of_eventually_bounded_above
+      hsub hSnonneg hSle
+  have hS :
+      limsup S atTop = floorSumAAdditiveEnergyExponent r := by
+    have hmap :
+        limsup (G ∘ fun N : ℕ => N + 1) atTop =
+          limsup G atTop := by
+      rw [Filter.limsup_comp, Filter.map_add_atTop_eq_nat]
+    simpa [S, G, floorSumAAdditiveEnergyExponent, Function.comp_def]
+      using hmap
+  simpa [floorSumATruncIccAdditiveEnergyExponent, H] using hHS.trans hS
+
 lemma log_energy_le_three_log_visibleBlockMax_add_error
     {a : ℕ → ℕ}
     (hpos : ∀ n : ℕ, 0 < a (n + 1)) :
@@ -5341,6 +5833,321 @@ theorem positiveVisibleAdditiveEnergyExponent_eq_three_mul_canonicalBlockExponen
             visibleAdditiveEnergyExponent_eq_three_mul_canonicalBlockExponent hpos
   · exact three_mul_canonicalBlockExponent_le_positiveVisibleAdditiveEnergyExponent
       hpos
+
+/-- For any chosen simple continued-fraction expansion, the positive visible
+canonical denominator set is exactly the actual finite floor-sum truncation. -/
+theorem positiveVisibleCanonicalDenominatorSet_eq_visibleFloorSumASet
+    {α : ℝ} {a : ℕ → ℕ}
+    (hαpos : 0 < α)
+    (hαirr : IsIrrational α)
+    (hcf : IsSimpleCFExpansion α a)
+    (N : ℕ) :
+    positiveVisibleCanonicalDenominatorSet a N =
+      visibleFloorSumASet α N := by
+  simpa [positiveVisibleCanonicalDenominatorSet] using
+    visibleCanonicalDenominatorSet_erase_zero_eq_visibleFloorSumASet
+      hαpos hαirr hcf N
+
+/-- The positive visible additive-energy exponent agrees with the actual
+floor-sum additive-energy exponent attached to the same irrational. -/
+theorem positiveVisibleAdditiveEnergyExponent_eq_floorSumAAdditiveEnergyExponent
+    {α : ℝ} {a : ℕ → ℕ}
+    (hαpos : 0 < α)
+    (hαirr : IsIrrational α)
+    (hcf : IsSimpleCFExpansion α a) :
+    positiveVisibleAdditiveEnergyExponent a =
+      floorSumAAdditiveEnergyExponent α := by
+  simpa [positiveVisibleAdditiveEnergyExponent,
+    floorSumAAdditiveEnergyExponent, additiveEnergyExponentOf] using
+    additiveEnergyExponent_congr
+      (S := fun N : ℕ => positiveVisibleCanonicalDenominatorSet a N)
+      (T := fun N : ℕ => visibleFloorSumASet α N)
+      (fun N =>
+        positiveVisibleCanonicalDenominatorSet_eq_visibleFloorSumASet
+          hαpos hαirr hcf N)
+
+/-- Positive-irrational floor-sum additive energy has exponent
+`3 * canonicalBlockExponent` for any chosen simple continued-fraction
+expansion. -/
+theorem floorSumAAdditiveEnergyExponent_eq_three_mul_canonicalBlockExponent
+    {α : ℝ} {a : ℕ → ℕ}
+    (hαpos : 0 < α)
+    (hαirr : IsIrrational α)
+    (hcf : IsSimpleCFExpansion α a) :
+    floorSumAAdditiveEnergyExponent α =
+      3 * canonicalBlockExponent a := by
+  rw [← positiveVisibleAdditiveEnergyExponent_eq_floorSumAAdditiveEnergyExponent
+    hαpos hαirr hcf]
+  exact positiveVisibleAdditiveEnergyExponent_eq_three_mul_canonicalBlockExponent
+    hcf.1
+
+/-- Public `[1,N]` truncation version of the positive-irrational additive
+energy exponent theorem. -/
+theorem floorSumATruncIccAdditiveEnergyExponent_eq_three_mul_canonicalBlockExponent
+    {α : ℝ} {a : ℕ → ℕ}
+    (hαpos : 0 < α)
+    (hαirr : IsIrrational α)
+    (hcf : IsSimpleCFExpansion α a) :
+    floorSumATruncIccAdditiveEnergyExponent α =
+      3 * canonicalBlockExponent a := by
+  rw [floorSumATruncIccAdditiveEnergyExponent_eq_floorSumAAdditiveEnergyExponent]
+  exact floorSumAAdditiveEnergyExponent_eq_three_mul_canonicalBlockExponent
+    hαpos hαirr hcf
+
+/-- Refined positive-irrational exponent form:
+if the coefficient sequence satisfies the canonical block-growth formula and
+`μ = 2 + τ`, then the actual floor-sum additive-energy exponent is
+`3 * (μ - 2) / (μ - 1)`. -/
+theorem floorSumAAdditiveEnergyExponent_eq_three_mul_irrationalityMeasure_formula
+    {α : ℝ} {a : ℕ → ℕ} {μ : ℝ}
+    (hαpos : 0 < α)
+    (hαirr : IsIrrational α)
+    (hcf : IsSimpleCFExpansion α a)
+    (hblock : HasCanonicalBlockGrowthFormula a)
+    (hμ : HasIrrationalityMeasureFromCF a μ) :
+    floorSumAAdditiveEnergyExponent α =
+      3 * ((μ - 2) / (μ - 1)) := by
+  rw [floorSumAAdditiveEnergyExponent_eq_three_mul_canonicalBlockExponent
+    hαpos hαirr hcf]
+  let tau : ℝ := partialQuotientGrowthTau a
+  have hlam_tau : canonicalBlockExponent a = tau / (1 + tau) := by
+    simpa [tau, HasCanonicalBlockGrowthFormula] using hblock
+  have hmu_tau : μ = 2 + tau := by
+    simpa [tau, HasIrrationalityMeasureFromCF] using hμ
+  rw [hlam_tau, hmu_tau]
+  ring_nf
+
+/-- Public `[1,N]` truncation version of the refined exponent formula. -/
+theorem floorSumATruncIccAdditiveEnergyExponent_eq_three_mul_irrationalityMeasure_formula
+    {α : ℝ} {a : ℕ → ℕ} {μ : ℝ}
+    (hαpos : 0 < α)
+    (hαirr : IsIrrational α)
+    (hcf : IsSimpleCFExpansion α a)
+    (hblock : HasCanonicalBlockGrowthFormula a)
+    (hμ : HasIrrationalityMeasureFromCF a μ) :
+    floorSumATruncIccAdditiveEnergyExponent α =
+      3 * ((μ - 2) / (μ - 1)) := by
+  rw [floorSumATruncIccAdditiveEnergyExponent_eq_floorSumAAdditiveEnergyExponent]
+  exact floorSumAAdditiveEnergyExponent_eq_three_mul_irrationalityMeasure_formula
+    hαpos hαirr hcf hblock hμ
+
+theorem floorSumAAdditiveEnergyExponent_eq_zero_iff_canonicalBlockExponent_eq_zero
+    {α : ℝ} {a : ℕ → ℕ}
+    (hαpos : 0 < α)
+    (hαirr : IsIrrational α)
+    (hcf : IsSimpleCFExpansion α a) :
+    floorSumAAdditiveEnergyExponent α = 0 ↔
+      canonicalBlockExponent a = 0 := by
+  rw [floorSumAAdditiveEnergyExponent_eq_three_mul_canonicalBlockExponent
+    hαpos hαirr hcf]
+  constructor <;> intro h
+  · nlinarith
+  · nlinarith
+
+theorem floorSumATruncIccAdditiveEnergyExponent_eq_zero_iff_canonicalBlockExponent_eq_zero
+    {α : ℝ} {a : ℕ → ℕ}
+    (hαpos : 0 < α)
+    (hαirr : IsIrrational α)
+    (hcf : IsSimpleCFExpansion α a) :
+    floorSumATruncIccAdditiveEnergyExponent α = 0 ↔
+      canonicalBlockExponent a = 0 := by
+  rw [floorSumATruncIccAdditiveEnergyExponent_eq_floorSumAAdditiveEnergyExponent]
+  exact floorSumAAdditiveEnergyExponent_eq_zero_iff_canonicalBlockExponent_eq_zero
+    hαpos hαirr hcf
+
+theorem floorSumAAdditiveEnergyExponent_eq_zero_iff_irrationalityMeasureFromCF_eq_two
+    {α : ℝ} {a : ℕ → ℕ} {μ : ℝ}
+    (hαpos : 0 < α)
+    (hαirr : IsIrrational α)
+    (hcf : IsSimpleCFExpansion α a)
+    (hblock : HasCanonicalBlockGrowthFormula a)
+    (hμ : HasIrrationalityMeasureFromCF a μ)
+    (hμne : μ ≠ 1) :
+    floorSumAAdditiveEnergyExponent α = 0 ↔ μ = 2 := by
+  rw [floorSumAAdditiveEnergyExponent_eq_three_mul_irrationalityMeasure_formula
+    hαpos hαirr hcf hblock hμ]
+  constructor
+  · intro hzero
+    have hfrac :
+        (μ - 2) / (μ - 1) = 0 := by nlinarith
+    have hden : μ - 1 ≠ 0 := by
+      intro h
+      apply hμne
+      linarith
+    have hnum : μ - 2 = 0 := by
+      exact (div_eq_zero_iff.mp hfrac).resolve_right hden
+    linarith
+  · intro hμ2
+    rw [hμ2]
+    norm_num
+
+theorem floorSumATruncIccAdditiveEnergyExponent_eq_zero_iff_irrationalityMeasureFromCF_eq_two
+    {α : ℝ} {a : ℕ → ℕ} {μ : ℝ}
+    (hαpos : 0 < α)
+    (hαirr : IsIrrational α)
+    (hcf : IsSimpleCFExpansion α a)
+    (hblock : HasCanonicalBlockGrowthFormula a)
+    (hμ : HasIrrationalityMeasureFromCF a μ)
+    (hμne : μ ≠ 1) :
+    floorSumATruncIccAdditiveEnergyExponent α = 0 ↔ μ = 2 := by
+  rw [floorSumATruncIccAdditiveEnergyExponent_eq_floorSumAAdditiveEnergyExponent]
+  exact
+    floorSumAAdditiveEnergyExponent_eq_zero_iff_irrationalityMeasureFromCF_eq_two
+      hαpos hαirr hcf hblock hμ hμne
+
+/-- Bounded finite-growth version of the zero-exponent/measure-`2` bridge.
+
+The boundedness assumption implies `partialQuotientGrowthTau a ≥ 0`, so the
+auxiliary denominator `1 + tau` cannot vanish. -/
+theorem floorSumAAdditiveEnergyExponent_eq_zero_iff_irrationalityMeasureFromCF_eq_two_of_bounded
+    {α : ℝ} {a : ℕ → ℕ} {μ : ℝ}
+    (hαpos : 0 < α)
+    (hαirr : IsIrrational α)
+    (hcf : IsSimpleCFExpansion α a)
+    (hblock : HasCanonicalBlockGrowthFormula a)
+    (hbounded :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop
+        (pqLogRatio a))
+    (hμ : HasIrrationalityMeasureFromCF a μ) :
+    floorSumAAdditiveEnergyExponent α = 0 ↔ μ = 2 := by
+  have hden :
+      1 + partialQuotientGrowthTau a ≠ 0 :=
+    one_add_partialQuotientGrowthTau_ne_zero_of_bounded hcf.1 hbounded
+  have hμne : μ ≠ 1 := by
+    have hμeq : μ = 2 + partialQuotientGrowthTau a := by
+      simpa [HasIrrationalityMeasureFromCF] using hμ
+    intro hμ1
+    apply hden
+    linarith
+  exact
+    floorSumAAdditiveEnergyExponent_eq_zero_iff_irrationalityMeasureFromCF_eq_two
+      hαpos hαirr hcf hblock hμ hμne
+
+theorem floorSumATruncIccAdditiveEnergyExponent_eq_zero_iff_irrationalityMeasureFromCF_eq_two_of_bounded
+    {α : ℝ} {a : ℕ → ℕ} {μ : ℝ}
+    (hαpos : 0 < α)
+    (hαirr : IsIrrational α)
+    (hcf : IsSimpleCFExpansion α a)
+    (hblock : HasCanonicalBlockGrowthFormula a)
+    (hbounded :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop
+        (pqLogRatio a))
+    (hμ : HasIrrationalityMeasureFromCF a μ) :
+    floorSumATruncIccAdditiveEnergyExponent α = 0 ↔ μ = 2 := by
+  rw [floorSumATruncIccAdditiveEnergyExponent_eq_floorSumAAdditiveEnergyExponent]
+  exact
+    floorSumAAdditiveEnergyExponent_eq_zero_iff_irrationalityMeasureFromCF_eq_two_of_bounded
+      hαpos hαirr hcf hblock hbounded hμ
+
+/-- Same zero-exponent/measure-`2` equivalence after replacing the parameter
+by another one with the same floor-sum set.  This is the formal version of the
+normalization step `A_r = A_α` in the writeup. -/
+theorem floorSumAAdditiveEnergyExponent_eq_zero_iff_cf_measure_eq_two_of_A_eq
+    {r α : ℝ} {a : ℕ → ℕ} {μ : ℝ}
+    (hA : A α = A r)
+    (hαpos : 0 < α)
+    (hαirr : IsIrrational α)
+    (hcf : IsSimpleCFExpansion α a)
+    (hblock : HasCanonicalBlockGrowthFormula a)
+    (hμ : HasIrrationalityMeasureFromCF a μ)
+    (hμne : μ ≠ 1) :
+    floorSumAAdditiveEnergyExponent r = 0 ↔ μ = 2 := by
+  have hExp :
+      floorSumAAdditiveEnergyExponent r =
+        floorSumAAdditiveEnergyExponent α :=
+    floorSumAAdditiveEnergyExponent_congr hA.symm
+  rw [hExp]
+  exact
+    floorSumAAdditiveEnergyExponent_eq_zero_iff_irrationalityMeasureFromCF_eq_two
+      hαpos hαirr hcf hblock hμ hμne
+
+/-- Literal-measure version of the positive irrational theorem.
+
+If the CF-computed value `2 + tau` is known to satisfy the actual
+irrationality-measure predicate, then zero additive-energy exponent is
+equivalent to the literal predicate `HasIrrationalityMeasure α 2`. -/
+theorem floorSumAAdditiveEnergyExponent_eq_zero_iff_hasIrrationalityMeasure_two
+    {α : ℝ} {a : ℕ → ℕ}
+    (hαpos : 0 < α)
+    (hαirr : IsIrrational α)
+    (hcf : IsSimpleCFExpansion α a)
+    (hblock : HasCanonicalBlockGrowthFormula a)
+    (hmetric :
+      HasIrrationalityMeasure α (2 + partialQuotientGrowthTau a))
+    (hden : 1 + partialQuotientGrowthTau a ≠ 0) :
+    floorSumAAdditiveEnergyExponent α = 0 ↔
+    HasIrrationalityMeasure α 2 := by
+  let μ : ℝ := 2 + partialQuotientGrowthTau a
+  have hμcf : HasIrrationalityMeasureFromCF a μ := by
+    simp [μ, HasIrrationalityMeasureFromCF]
+  have hμne : μ ≠ 1 := by
+    intro h
+    apply hden
+    dsimp [μ] at h
+    linarith
+  have hzero :
+      floorSumAAdditiveEnergyExponent α = 0 ↔ μ = 2 :=
+    floorSumAAdditiveEnergyExponent_eq_zero_iff_irrationalityMeasureFromCF_eq_two
+      hαpos hαirr hcf hblock hμcf hμne
+  have hmetricμ : HasIrrationalityMeasure α μ := by
+    simpa [μ] using hmetric
+  constructor
+  · intro hE
+    exact hasIrrationalityMeasure_congr_measure (hzero.mp hE) hmetricμ
+  · intro hμ2
+    exact hzero.mpr (HasIrrationalityMeasure_unique hmetricμ hμ2)
+
+theorem floorSumATruncIccAdditiveEnergyExponent_eq_zero_iff_hasIrrationalityMeasure_two
+    {α : ℝ} {a : ℕ → ℕ}
+    (hαpos : 0 < α)
+    (hαirr : IsIrrational α)
+    (hcf : IsSimpleCFExpansion α a)
+    (hblock : HasCanonicalBlockGrowthFormula a)
+    (hmetric :
+      HasIrrationalityMeasure α (2 + partialQuotientGrowthTau a))
+    (hden : 1 + partialQuotientGrowthTau a ≠ 0) :
+    floorSumATruncIccAdditiveEnergyExponent α = 0 ↔
+      HasIrrationalityMeasure α 2 := by
+  rw [floorSumATruncIccAdditiveEnergyExponent_eq_floorSumAAdditiveEnergyExponent]
+  exact
+    floorSumAAdditiveEnergyExponent_eq_zero_iff_hasIrrationalityMeasure_two
+      hαpos hαirr hcf hblock hmetric hden
+
+/-- Bounded finite-growth version of the literal-measure theorem. -/
+theorem floorSumAAdditiveEnergyExponent_eq_zero_iff_hasIrrationalityMeasure_two_of_bounded
+    {α : ℝ} {a : ℕ → ℕ}
+    (hαpos : 0 < α)
+    (hαirr : IsIrrational α)
+    (hcf : IsSimpleCFExpansion α a)
+    (hblock : HasCanonicalBlockGrowthFormula a)
+    (hmetric :
+      HasIrrationalityMeasure α (2 + partialQuotientGrowthTau a))
+    (hbounded :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop
+        (pqLogRatio a)) :
+    floorSumAAdditiveEnergyExponent α = 0 ↔
+      HasIrrationalityMeasure α 2 :=
+  floorSumAAdditiveEnergyExponent_eq_zero_iff_hasIrrationalityMeasure_two
+    hαpos hαirr hcf hblock hmetric
+    (one_add_partialQuotientGrowthTau_ne_zero_of_bounded hcf.1 hbounded)
+
+theorem floorSumATruncIccAdditiveEnergyExponent_eq_zero_iff_hasIrrationalityMeasure_two_of_bounded
+    {α : ℝ} {a : ℕ → ℕ}
+    (hαpos : 0 < α)
+    (hαirr : IsIrrational α)
+    (hcf : IsSimpleCFExpansion α a)
+    (hblock : HasCanonicalBlockGrowthFormula a)
+    (hmetric :
+      HasIrrationalityMeasure α (2 + partialQuotientGrowthTau a))
+    (hbounded :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop
+        (pqLogRatio a)) :
+    floorSumATruncIccAdditiveEnergyExponent α = 0 ↔
+      HasIrrationalityMeasure α 2 := by
+  rw [floorSumATruncIccAdditiveEnergyExponent_eq_floorSumAAdditiveEnergyExponent]
+  exact
+    floorSumAAdditiveEnergyExponent_eq_zero_iff_hasIrrationalityMeasure_two_of_bounded
+      hαpos hαirr hcf hblock hmetric hbounded
 
 lemma properHilbertCubeDimension_ge_of_hasProperHilbertCube
     {S : Finset ℕ} {h : ℕ}
@@ -6809,6 +7616,62 @@ lemma continuantDenLogRatio_sub_one_add_pqLogRatio_tendsto_zero
     simpa [continuantDenLogRatio, pqLogRatio, qn, qnext, an, den] using hgoal
   · exact log_const_over_log_continuantDen_tendsto_zero hpos (Real.log 2)
 
+theorem denominatorRatioExponent_eq_one_add_tau_of_bounded
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1))
+    (hbounded :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop
+        (pqLogRatio a)) :
+    denominatorRatioExponent a = 1 + partialQuotientGrowthTau a := by
+  let D : ℕ → ℝ := continuantDenLogRatio a
+  let P : ℕ → ℝ := pqLogRatio a
+  have hPnonneg : ∀ᶠ n : ℕ in atTop, 0 ≤ P n := by
+    simpa [P] using pqLogRatio_nonneg_eventually hpos
+  have hPcobdd :
+      Filter.IsCoboundedUnder (fun x y : ℝ => x ≤ y) atTop P :=
+    Filter.IsCoboundedUnder.of_frequently_ge hPnonneg.frequently
+  rcases hbounded.eventually_le with ⟨B, hB⟩
+  have honeP_nonneg : ∀ᶠ n : ℕ in atTop, 0 ≤ 1 + P n := by
+    filter_upwards [hPnonneg] with n hn
+    linarith
+  have honeP_le : ∀ᶠ n : ℕ in atTop, 1 + P n ≤ 1 + B := by
+    filter_upwards [by simpa [P] using hB] with n hn
+    have hnP : P n ≤ B := by
+      simpa [P] using hn
+    linarith
+  have hD_eq :
+      limsup D atTop = limsup (fun n : ℕ => 1 + P n) atTop := by
+    refine limsup_eq_of_sub_tendsto_zero_of_eventually_bounded_above
+      (C := 1 + B) ?_ ?_ ?_
+    · simpa [D, P] using
+        continuantDenLogRatio_sub_one_add_pqLogRatio_tendsto_zero hpos
+    · exact honeP_nonneg
+    · exact honeP_le
+  have h_add :
+      limsup (fun n : ℕ => 1 + P n) atTop =
+        1 + limsup P atTop := by
+    simpa using
+      limsup_const_add (F := atTop) (f := P) (c := (1 : ℝ))
+        (by simpa [P] using hbounded) hPcobdd
+  calc
+    denominatorRatioExponent a = limsup D atTop := by
+      rfl
+    _ = limsup (fun n : ℕ => 1 + P n) atTop := hD_eq
+    _ = 1 + limsup P atTop := h_add
+    _ = 1 + partialQuotientGrowthTau a := by
+      rfl
+
+theorem one_add_denominatorRatioExponent_eq_two_add_tau_of_bounded
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1))
+    (hbounded :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop
+        (pqLogRatio a)) :
+    1 + denominatorRatioExponent a =
+      2 + partialQuotientGrowthTau a := by
+  rw [denominatorRatioExponent_eq_one_add_tau_of_bounded hpos hbounded]
+  ring
+
 lemma one_add_pqLogRatio_le_continuantDenLogRatio_eventually
     {a : ℕ → ℕ}
     (hpos : ∀ n : ℕ, 0 < a (n + 1)) :
@@ -7156,6 +8019,43 @@ theorem partialQuotientEndpointExponent_eq_one_of_unbounded
   rw [limsup_pqEndpointLogRatio_eq_limsup_transform hpos]
   exact limsup_pqLogRatioTransform_eq_one_of_unbounded hpos hunbounded
 
+lemma eventually_inv_two_power_gt_power_neg_of_lt
+    {γ ν : ℝ}
+    (hγν : γ < ν) :
+    ∀ᶠ q : ℕ in atTop,
+      1 / (2 * (q : ℝ) ^ γ) >
+        (q : ℝ) ^ (-ν) := by
+  let δ : ℝ := ν - γ
+  have hδ : 0 < δ := by
+    dsimp [δ]
+    linarith
+  filter_upwards
+    [eventually_nat_cast_one_lt_atTop,
+      eventually_two_lt_nat_rpow_atTop hδ] with q hqgt1 hpow
+  let x : ℝ := q
+  have hx : 0 < x := by
+    dsimp [x]
+    linarith
+  have hνeq : ν = γ + δ := by
+    dsimp [δ]
+    ring
+  have hApos : 0 < x ^ γ := Real.rpow_pos_of_pos hx _
+  have hdenlt : 2 * x ^ γ < x ^ γ * x ^ δ := by
+    nlinarith [mul_lt_mul_of_pos_left hpow hApos]
+  have hinv :
+      1 / (x ^ γ * x ^ δ) <
+        1 / (2 * x ^ γ) := by
+    exact one_div_lt_one_div_of_lt
+      (mul_pos (by norm_num) hApos) hdenlt
+  have hrewrite : x ^ (-ν) = 1 / (x ^ γ * x ^ δ) := by
+    rw [hνeq, neg_add, Real.rpow_add hx]
+    rw [Real.rpow_neg hx.le, Real.rpow_neg hx.le]
+    field_simp [Real.rpow_pos_of_pos hx γ,
+      Real.rpow_pos_of_pos hx δ]
+  have hgoal : x ^ (-ν) < 1 / (2 * x ^ γ) := by
+    simpa [hrewrite] using hinv
+  simpa [x] using hgoal
+
 theorem denominatorRatio_tendsto_one_of_log_partialQuotient_tendsto_zero
     {a : ℕ → ℕ}
     (hpos : ∀ n : ℕ, 0 < a (n + 1))
@@ -7326,6 +8226,500 @@ lemma eventually_qsucc_le_power_of_denominatorRatio_tendsto_one
   have hle' : qnext ≤ qn ^ (1 + ε) := by
     exact (Real.log_le_log_iff hqnext_pos hrpow_pos).mp hlog_le
   simpa [qn, qnext] using hle'
+
+lemma continuantDenLogRatio_ge_one_eventually
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1)) :
+    ∀ᶠ n : ℕ in atTop,
+      1 ≤ continuantDenLogRatio a n := by
+  filter_upwards
+    [one_add_pqLogRatio_le_continuantDenLogRatio_eventually hpos,
+      pqLogRatio_nonneg_eventually hpos] with n hle hnonneg
+  linarith
+
+lemma continuantDenLogRatio_isCoboundedUnder
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1)) :
+    IsCoboundedUnder (fun x y : ℝ => x ≤ y) atTop
+      (continuantDenLogRatio a) :=
+  Filter.IsCoboundedUnder.of_frequently_ge
+    (continuantDenLogRatio_ge_one_eventually hpos).frequently
+
+lemma one_le_denominatorRatioExponent_of_bounded
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1))
+    (hbdd :
+      IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop
+        (continuantDenLogRatio a)) :
+    1 ≤ denominatorRatioExponent a := by
+  simpa [denominatorRatioExponent, continuantDenLogRatio] using
+    Filter.le_limsup_of_frequently_le
+      (continuantDenLogRatio_ge_one_eventually hpos).frequently hbdd
+
+lemma continuantDenLogRatio_isBoundedUnder_of_pqLogRatio_bounded
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1))
+    (hbounded :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop
+        (pqLogRatio a)) :
+    IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop
+      (continuantDenLogRatio a) := by
+  rcases hbounded.eventually_le with ⟨B, hB⟩
+  have herr :
+      ∀ᶠ n : ℕ in atTop,
+        continuantDenLogRatio a n - (1 + pqLogRatio a n) ≤ 1 := by
+    exact
+      (continuantDenLogRatio_sub_one_add_pqLogRatio_tendsto_zero hpos).eventually
+        (eventually_le_nhds (by norm_num : (0 : ℝ) < 1))
+  exact Filter.isBoundedUnder_of_eventually_le (a := B + 2) <| by
+    filter_upwards [herr, hB] with n hn hPn
+    linarith
+
+lemma eventually_qsucc_le_power_of_denominatorRatioExponent_lt
+    {a : ℕ → ℕ} {c : ℝ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1))
+    (hbdd :
+      IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop
+        (continuantDenLogRatio a))
+    (hrho_lt : denominatorRatioExponent a < c) :
+    ∀ᶠ n : ℕ in atTop,
+      (continuantDen a (n + 1) : ℝ) ≤
+        (continuantDen a n : ℝ) ^ c := by
+  have hratio_lt :
+      ∀ᶠ n : ℕ in atTop,
+        continuantDenLogRatio a n < c :=
+    eventually_lt_of_limsup_lt (by
+      simpa [denominatorRatioExponent] using hrho_lt) hbdd
+  have hqR : Tendsto (fun n : ℕ => (continuantDen a n : ℝ)) atTop atTop :=
+    tendsto_natCast_atTop_atTop.comp
+      (continuantDen_tendsto_atTop_of_partials_pos hpos)
+  have hqgt1 : ∀ᶠ n : ℕ in atTop, (1 : ℝ) < continuantDen a n :=
+    hqR.eventually_gt_atTop 1
+  filter_upwards [hratio_lt, hqgt1] with n hlt hqn_gt1
+  let qn : ℝ := continuantDen a n
+  let qnext : ℝ := continuantDen a (n + 1)
+  have hqn_pos : 0 < qn := by
+    dsimp [qn]
+    linarith
+  have hlogpos : 0 < Real.log qn := by
+    dsimp [qn]
+    exact Real.log_pos hqn_gt1
+  have hqnext_gt1 : (1 : ℝ) < qnext := by
+    dsimp [qnext]
+    have hmono_nat : continuantDen a n ≤ continuantDen a (n + 1) :=
+      continuantDen_mono_of_partials_pos a hpos n
+    exact lt_of_lt_of_le hqn_gt1 (by exact_mod_cast hmono_nat)
+  have hqnext_pos : 0 < qnext := by linarith
+  have hrpow_pos : 0 < qn ^ c := Real.rpow_pos_of_pos hqn_pos _
+  have hmul_le :
+      (Real.log qnext / Real.log qn) * Real.log qn ≤
+        c * Real.log qn := by
+    exact mul_le_mul_of_nonneg_right
+      (le_of_lt (by simpa [continuantDenLogRatio, qn, qnext] using hlt))
+      hlogpos.le
+  have hleft :
+      (Real.log qnext / Real.log qn) * Real.log qn =
+        Real.log qnext := by
+    exact div_mul_cancel₀ _ hlogpos.ne'
+  have hright : c * Real.log qn = Real.log (qn ^ c) := by
+    rw [Real.log_rpow hqn_pos]
+  have hlog_le : Real.log qnext ≤ Real.log (qn ^ c) := by
+    simpa [hleft, hright] using hmul_le
+  have hle' : qnext ≤ qn ^ c := by
+    exact (Real.log_le_log_iff hqnext_pos hrpow_pos).mp hlog_le
+  simpa [qn, qnext] using hle'
+
+theorem lower_clause_from_frequently_large_denominatorRatio
+    {α : ℝ} {a : ℕ → ℕ} {ν : ℝ}
+    (hcf : IsSimpleCFExpansion α a)
+    (hfreqD :
+      ∃ᶠ n : ℕ in atTop,
+        ν - 1 < continuantDenLogRatio a n) :
+    ∃ᶠ q : ℕ in atTop,
+      ∃ p : ℤ,
+        0 < q ∧
+          |α - (p : ℝ) / (q : ℝ)| < (q : ℝ) ^ (-ν) := by
+  rcases hcf with ⟨hpos, hconv, htails⟩
+  have hqT : Tendsto (continuantDen a) atTop atTop :=
+    continuantDen_tendsto_atTop_of_partials_pos hpos
+  refine hqT.frequently ?_
+  have hqR : Tendsto (fun n : ℕ => (continuantDen a n : ℝ)) atTop atTop :=
+    tendsto_natCast_atTop_atTop.comp hqT
+  have hqgt1 : ∀ᶠ n : ℕ in atTop, (1 : ℝ) < continuantDen a n :=
+    hqR.eventually_gt_atTop 1
+  exact (hfreqD.and_eventually hqgt1).mono fun n hn => by
+    rcases hn with ⟨hDgt, hqn_gt1⟩
+    refine ⟨(continuantNum a n : ℤ), ?_, ?_⟩
+    · have hqn_pos_nat : 0 < continuantDen a n := by
+        exact_mod_cast (lt_trans (zero_lt_one : (0 : ℝ) < 1) hqn_gt1)
+      exact hqn_pos_nat
+    · let qn : ℝ := continuantDen a n
+      let qnext : ℝ := continuantDen a (n + 1)
+      have hqn_pos : 0 < qn := by
+        dsimp [qn]
+        exact lt_trans zero_lt_one hqn_gt1
+      have hqnext_pos : 0 < qnext := by
+        dsimp [qnext]
+        have hmono_nat : continuantDen a n ≤ continuantDen a (n + 1) :=
+          continuantDen_mono_of_partials_pos a hpos n
+        exact lt_of_lt_of_le (lt_trans zero_lt_one hqn_gt1)
+          (by exact_mod_cast hmono_nat)
+      have hlogpos : 0 < Real.log qn := by
+        dsimp [qn]
+        exact Real.log_pos hqn_gt1
+      have hmul_lt :
+          (ν - 1) * Real.log qn < Real.log qnext := by
+        have hmul := mul_lt_mul_of_pos_right hDgt hlogpos
+        have hcancel :
+            (Real.log qnext / Real.log qn) * Real.log qn =
+              Real.log qnext :=
+          div_mul_cancel₀ _ hlogpos.ne'
+        simpa [continuantDenLogRatio, qn, qnext, hcancel] using hmul
+      have hqpow_lt_qnext :
+          qn ^ (ν - 1) < qnext := by
+        have hlog_lt :
+            Real.log (qn ^ (ν - 1)) < Real.log qnext := by
+          rw [Real.log_rpow hqn_pos]
+          exact hmul_lt
+        exact (Real.log_lt_log_iff
+          (Real.rpow_pos_of_pos hqn_pos _) hqnext_pos).mp hlog_lt
+      have hprod_lt :
+          qn * qn ^ (ν - 1) < qn * qnext :=
+        mul_lt_mul_of_pos_left hqpow_lt_qnext hqn_pos
+      have hprod_pos : 0 < qn * qn ^ (ν - 1) :=
+        mul_pos hqn_pos (Real.rpow_pos_of_pos hqn_pos _)
+      have hinv_lt :
+          1 / (qn * qnext) < 1 / (qn * qn ^ (ν - 1)) :=
+        one_div_lt_one_div_of_lt hprod_pos hprod_lt
+      have hden_eq : qn * qn ^ (ν - 1) = qn ^ ν := by
+        calc
+          qn * qn ^ (ν - 1) = qn ^ (1 : ℝ) * qn ^ (ν - 1) := by
+            rw [Real.rpow_one]
+          _ = qn ^ ((1 : ℝ) + (ν - 1)) := by
+            exact (Real.rpow_add hqn_pos (1 : ℝ) (ν - 1)).symm
+          _ = qn ^ ν := by ring_nf
+      have htarget : 1 / (qn * qnext) < qn ^ (-ν) := by
+        rw [Real.rpow_neg hqn_pos.le]
+        simpa [hden_eq] using hinv_lt
+      have herr := convergent_error_lt_inv_mul_q_qsucc (α := α) (a := a)
+        ⟨hpos, hconv, htails⟩ n
+      have hmain :
+          |α - (continuantNum a n : ℝ) / (continuantDen a n : ℝ)| <
+            (continuantDen a n : ℝ) ^ (-ν) :=
+        herr.trans htarget
+      simpa [qn, qnext, Int.cast_natCast] using hmain
+
+theorem lower_clause_from_denominatorRatioExponent_of_bounded
+    {α : ℝ} {a : ℕ → ℕ}
+    (hcf : IsSimpleCFExpansion α a) :
+    ∀ ν : ℝ,
+      ν < 1 + denominatorRatioExponent a →
+        ∃ᶠ q : ℕ in atTop,
+          ∃ p : ℤ,
+            0 < q ∧
+              |α - (p : ℝ) / (q : ℝ)| < (q : ℝ) ^ (-ν) := by
+  intro ν hν
+  have hpos : ∀ n : ℕ, 0 < a (n + 1) := hcf.1
+  have hDcobdd : IsCoboundedUnder (fun x y : ℝ => x ≤ y) atTop
+      (continuantDenLogRatio a) :=
+    continuantDenLogRatio_isCoboundedUnder hpos
+  have hcrit : ν - 1 < denominatorRatioExponent a := by
+    linarith
+  have hfreqD :
+      ∃ᶠ n : ℕ in atTop, ν - 1 < continuantDenLogRatio a n :=
+    Filter.frequently_lt_of_lt_limsup hDcobdd (by
+      simpa [denominatorRatioExponent] using hcrit)
+  exact lower_clause_from_frequently_large_denominatorRatio hcf hfreqD
+
+theorem upper_clause_from_denominatorRatioExponent_of_bounded
+    {α : ℝ} {a : ℕ → ℕ}
+    (hcf : IsSimpleCFExpansion α a)
+    (hbdd :
+      IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop
+        (continuantDenLogRatio a)) :
+    ∀ ν : ℝ,
+      1 + denominatorRatioExponent a < ν →
+        ∀ᶠ q : ℕ in atTop,
+          ∀ p : ℤ,
+            0 < q →
+              ¬ |α - (p : ℝ) / (q : ℝ)| < (q : ℝ) ^ (-ν) := by
+  rcases hcf with ⟨hpos, hconv, htails⟩
+  intro ν hν
+  let ρ : ℝ := denominatorRatioExponent a
+  let c : ℝ := (ρ + (ν - 1)) / 2
+  have hρc : ρ < c := by
+    dsimp [c, ρ] at *
+    linarith
+  have hγν : 1 + c < ν := by
+    dsimp [c, ρ] at *
+    linarith
+  have hρge1 : 1 ≤ ρ := by
+    dsimp [ρ]
+    exact one_le_denominatorRatioExponent_of_bounded hpos hbdd
+  have hc_nonneg : 0 ≤ c := by
+    dsimp [c]
+    linarith
+  have hqsucc :
+      ∀ᶠ n : ℕ in atTop,
+        (continuantDen a (n + 1) : ℝ) ≤
+          (continuantDen a n : ℝ) ^ c :=
+    eventually_qsucc_le_power_of_denominatorRatioExponent_lt
+      hpos hbdd (by simpa [ρ] using hρc)
+  have hloc :
+      ∀ᶠ q : ℕ in atTop,
+        ∃ n : ℕ,
+          (continuantDen a (n + 1) : ℝ) ≤
+              (continuantDen a n : ℝ) ^ c ∧
+            continuantDen a n ≤ q ∧
+              q < continuantDen a (n + 1) :=
+    eventually_exists_convergent_interval_of_eventually hpos hqsucc
+  have hpowcmp :
+      ∀ᶠ q : ℕ in atTop,
+        1 / (2 * (q : ℝ) ^ (1 + c)) >
+          (q : ℝ) ^ (-ν) :=
+    eventually_inv_two_power_gt_power_neg_of_lt hγν
+  filter_upwards [hloc, hpowcmp, eventually_nat_cast_one_lt_atTop]
+    with q hlocq hcmp hqgt1 p hqpos happ
+  rcases hlocq with ⟨n, hqnext_le_qn_pow, hqlo, hqhi⟩
+  let x : ℝ := q
+  let qnext : ℝ := continuantDen a (n + 1)
+  have hx : 0 < x := by
+    dsimp [x]
+    exact_mod_cast hqpos
+  have hqnext_pos : 0 < qnext := by
+    dsimp [qnext]
+    exact_mod_cast (lt_trans hqpos hqhi)
+  have hqbase : (continuantDen a n : ℝ) ≤ x := by
+    dsimp [x]
+    exact_mod_cast hqlo
+  have hqnext_le_qpow : qnext ≤ x ^ c := by
+    have hpow_mono :
+        (continuantDen a n : ℝ) ^ c ≤ x ^ c := by
+      exact Real.rpow_le_rpow
+        (by positivity : (0 : ℝ) ≤ continuantDen a n)
+        hqbase hc_nonneg
+    exact hqnext_le_qn_pow.trans hpow_mono
+  have hxpow_mul : x * x ^ c = x ^ (1 + c) := by
+    calc
+      x * x ^ c = x ^ (1 : ℝ) * x ^ c := by
+        rw [Real.rpow_one]
+      _ = x ^ ((1 : ℝ) + c) := by
+        exact (Real.rpow_add hx (1 : ℝ) c).symm
+  have hden_le :
+      2 * x * qnext ≤ 2 * x ^ (1 + c) := by
+    calc
+      2 * x * qnext = 2 * (x * qnext) := by ring
+      _ ≤ 2 * (x * x ^ c) := by
+        gcongr
+      _ = 2 * x ^ (1 + c) := by rw [hxpow_mul]
+  have hden_pos : 0 < 2 * x * qnext := by positivity
+  have hinv_le :
+      1 / (2 * x ^ (1 + c)) ≤ 1 / (2 * x * qnext) := by
+    exact one_div_le_one_div_of_le hden_pos hden_le
+  have hbest :
+      1 / (2 * x * qnext) ≤ |α - (p : ℝ) / (q : ℝ)| := by
+    have h :=
+      rational_approx_lower_bound_between_convergents
+        (α := α) (a := a) ⟨hpos, hconv, htails⟩ n q p
+        hqlo hqhi hqpos
+    simpa [x, qnext, mul_assoc] using h
+  have htarget_lt_abs : (q : ℝ) ^ (-ν) < |α - (p : ℝ) / (q : ℝ)| := by
+    exact lt_of_lt_of_le (lt_of_lt_of_le hcmp hinv_le) hbest
+  exact not_lt_of_ge htarget_lt_abs.le happ
+
+theorem irrationalityMeasure_eq_one_add_denominatorRatioExponent_of_bounded
+    {α : ℝ} {a : ℕ → ℕ}
+    (hcf : IsSimpleCFExpansion α a)
+    (hbdd :
+      IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop
+        (continuantDenLogRatio a)) :
+    HasIrrationalityMeasure α (1 + denominatorRatioExponent a) := by
+  constructor
+  · exact lower_clause_from_denominatorRatioExponent_of_bounded hcf
+  · exact upper_clause_from_denominatorRatioExponent_of_bounded hcf hbdd
+
+theorem irrationalityMeasure_eq_two_add_tau_of_bounded
+    {α : ℝ} {a : ℕ → ℕ}
+    (hcf : IsSimpleCFExpansion α a)
+    (hbounded :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop
+        (pqLogRatio a)) :
+    HasIrrationalityMeasure α (2 + partialQuotientGrowthTau a) := by
+  rcases hcf with ⟨hpos, hconv, htails⟩
+  have hcf' : IsSimpleCFExpansion α a := ⟨hpos, hconv, htails⟩
+  have hDbdd :
+      IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop
+        (continuantDenLogRatio a) :=
+    continuantDenLogRatio_isBoundedUnder_of_pqLogRatio_bounded
+      hpos hbounded
+  have hmetric :
+      HasIrrationalityMeasure α (1 + denominatorRatioExponent a) :=
+    irrationalityMeasure_eq_one_add_denominatorRatioExponent_of_bounded
+      hcf' hDbdd
+  have hconvert :
+      1 + denominatorRatioExponent a =
+        2 + partialQuotientGrowthTau a :=
+    one_add_denominatorRatioExponent_eq_two_add_tau_of_bounded
+      hpos hbounded
+  exact hasIrrationalityMeasure_congr_measure hconvert hmetric
+
+/-- Finite partial-quotient-growth version with the CF metric and block-growth
+bridges discharged from the boundedness hypothesis. -/
+theorem floorSumAAdditiveEnergyExponent_eq_zero_iff_hasIrrationalityMeasure_two_of_tau_bounded
+    {α : ℝ} {a : ℕ → ℕ}
+    (hαpos : 0 < α)
+    (hαirr : IsIrrational α)
+    (hcf : IsSimpleCFExpansion α a)
+    (hbounded :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop
+        (pqLogRatio a)) :
+    floorSumAAdditiveEnergyExponent α = 0 ↔
+      HasIrrationalityMeasure α 2 := by
+  have hblock : HasCanonicalBlockGrowthFormula a :=
+    hasCanonicalBlockGrowthFormula_of_partials_pos_of_tau_bounded
+      hcf.1 hbounded
+  have hmetric :
+      HasIrrationalityMeasure α (2 + partialQuotientGrowthTau a) :=
+    irrationalityMeasure_eq_two_add_tau_of_bounded hcf hbounded
+  exact
+    floorSumAAdditiveEnergyExponent_eq_zero_iff_hasIrrationalityMeasure_two_of_bounded
+      hαpos hαirr hcf hblock hmetric hbounded
+
+theorem floorSumATruncIccAdditiveEnergyExponent_eq_zero_iff_hasIrrationalityMeasure_two_of_tau_bounded
+    {α : ℝ} {a : ℕ → ℕ}
+    (hαpos : 0 < α)
+    (hαirr : IsIrrational α)
+    (hcf : IsSimpleCFExpansion α a)
+    (hbounded :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop
+        (pqLogRatio a)) :
+    floorSumATruncIccAdditiveEnergyExponent α = 0 ↔
+      HasIrrationalityMeasure α 2 := by
+  rw [floorSumATruncIccAdditiveEnergyExponent_eq_floorSumAAdditiveEnergyExponent]
+  exact
+    floorSumAAdditiveEnergyExponent_eq_zero_iff_hasIrrationalityMeasure_two_of_tau_bounded
+      hαpos hαirr hcf hbounded
+
+/-- Refined finite-regime exponent formula stated with the literal
+irrationality-measure predicate. -/
+theorem floorSumATruncIccAdditiveEnergyExponent_eq_three_mul_irrationalityMeasure_formula_of_bounded
+    {α : ℝ} {a : ℕ → ℕ} {μ : ℝ}
+    (hαpos : 0 < α)
+    (hαirr : IsIrrational α)
+    (hcf : IsSimpleCFExpansion α a)
+    (hbounded :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop
+        (pqLogRatio a))
+    (hμ : HasIrrationalityMeasure α μ) :
+    floorSumATruncIccAdditiveEnergyExponent α =
+      3 * ((μ - 2) / (μ - 1)) := by
+  have hblock : HasCanonicalBlockGrowthFormula a :=
+    hasCanonicalBlockGrowthFormula_of_partials_pos_of_tau_bounded
+      hcf.1 hbounded
+  have hmetric :
+      HasIrrationalityMeasure α (2 + partialQuotientGrowthTau a) :=
+    irrationalityMeasure_eq_two_add_tau_of_bounded hcf hbounded
+  have hμeq : μ = 2 + partialQuotientGrowthTau a :=
+    HasIrrationalityMeasure_unique hμ hmetric
+  have hμcf : HasIrrationalityMeasureFromCF a μ := by
+    simp [HasIrrationalityMeasureFromCF, hμeq]
+  exact
+    floorSumATruncIccAdditiveEnergyExponent_eq_three_mul_irrationalityMeasure_formula
+      hαpos hαirr hcf hblock hμcf
+
+lemma frequently_large_denominatorRatio_of_partialQuotientGrowthUnbounded
+    {a : ℕ → ℕ}
+    (hpos : ∀ n : ℕ, 0 < a (n + 1))
+    (hunbounded : partialQuotientGrowthUnbounded a)
+    (C : ℝ) :
+    ∃ᶠ n : ℕ in atTop, C < continuantDenLogRatio a n := by
+  have hfreqP : ∃ᶠ n : ℕ in atTop, C ≤ pqLogRatio a n :=
+    hunbounded C
+  have hD :
+      ∀ᶠ n : ℕ in atTop,
+        1 + pqLogRatio a n ≤ continuantDenLogRatio a n :=
+    one_add_pqLogRatio_le_continuantDenLogRatio_eventually hpos
+  exact (hfreqP.and_eventually hD).mono fun n hn => by
+    rcases hn with ⟨hCP, hPD⟩
+    linarith
+
+theorem not_hasIrrationalityMeasure_two_of_partialQuotientGrowthUnbounded
+    {α : ℝ} {a : ℕ → ℕ}
+    (hcf : IsSimpleCFExpansion α a)
+    (hunbounded : partialQuotientGrowthUnbounded a) :
+    ¬ HasIrrationalityMeasure α 2 := by
+  intro hμ2
+  rcases hμ2 with ⟨_hlower, hupper⟩
+  have hfreq :
+      ∃ᶠ q : ℕ in atTop,
+        ∃ p : ℤ,
+          0 < q ∧
+            |α - (p : ℝ) / (q : ℝ)| < (q : ℝ) ^ (-(3 : ℝ)) := by
+    have hfreqD2 :
+        ∃ᶠ n : ℕ in atTop,
+          (2 : ℝ) < continuantDenLogRatio a n :=
+      frequently_large_denominatorRatio_of_partialQuotientGrowthUnbounded
+        hcf.1 hunbounded 2
+    have hfreqD :
+        ∃ᶠ n : ℕ in atTop,
+          (3 : ℝ) - 1 < continuantDenLogRatio a n :=
+      by
+        convert hfreqD2 using 1
+        norm_num
+    exact lower_clause_from_frequently_large_denominatorRatio
+      (α := α) (a := a) (ν := 3) hcf hfreqD
+  have hevent :
+      ∀ᶠ q : ℕ in atTop,
+        ∀ p : ℤ,
+        0 < q →
+            ¬ |α - (p : ℝ) / (q : ℝ)| < (q : ℝ) ^ (-(3 : ℝ)) :=
+    hupper 3 (by norm_num : (2 : ℝ) < 3)
+  have hfalse : ∃ᶠ q : ℕ in atTop, False :=
+    (hfreq.and_eventually hevent).mono fun _ hq => by
+      rcases hq with ⟨⟨p, hqpos, hlt⟩, hbad⟩
+      exact hbad p hqpos hlt
+  exact (Filter.frequently_false atTop) hfalse
+
+theorem floorSumATruncIccAdditiveEnergyExponent_eq_zero_iff_hasIrrationalityMeasure_two_of_simpleCFExpansion
+    {α : ℝ} {a : ℕ → ℕ}
+    (hαpos : 0 < α)
+    (hαirr : IsIrrational α)
+    (hcf : IsSimpleCFExpansion α a) :
+    floorSumATruncIccAdditiveEnergyExponent α = 0 ↔
+      HasIrrationalityMeasure α 2 := by
+  constructor
+  · intro hE
+    by_cases hbounded :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop
+        (pqLogRatio a)
+    · exact
+        (floorSumATruncIccAdditiveEnergyExponent_eq_zero_iff_hasIrrationalityMeasure_two_of_tau_bounded
+          hαpos hαirr hcf hbounded).mp hE
+    · exfalso
+      have hunbounded :
+          partialQuotientGrowthUnbounded a :=
+        partialQuotientGrowthUnbounded_of_not_isBoundedUnder hbounded
+      have henergy :
+          floorSumATruncIccAdditiveEnergyExponent α = 3 := by
+        rw [floorSumATruncIccAdditiveEnergyExponent_eq_three_mul_canonicalBlockExponent
+          hαpos hαirr hcf]
+        rw [canonicalBlockExponent_eq_one_of_partialQuotientGrowthUnbounded
+          hcf.1 hunbounded]
+        norm_num
+      linarith
+  · intro hμ2
+    by_cases hbounded :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) atTop
+        (pqLogRatio a)
+    · exact
+        (floorSumATruncIccAdditiveEnergyExponent_eq_zero_iff_hasIrrationalityMeasure_two_of_tau_bounded
+          hαpos hαirr hcf hbounded).mpr hμ2
+    · exfalso
+      have hunbounded :
+          partialQuotientGrowthUnbounded a :=
+        partialQuotientGrowthUnbounded_of_not_isBoundedUnder hbounded
+      exact not_hasIrrationalityMeasure_two_of_partialQuotientGrowthUnbounded
+        hcf hunbounded hμ2
 
 theorem lower_clause_from_convergents
     {α : ℝ} {a : ℕ → ℕ}

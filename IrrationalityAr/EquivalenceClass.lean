@@ -1,3 +1,4 @@
+import IrrationalityAr.CanonicalBlockGrowth
 import IrrationalityAr.ContinuedFractions
 import IrrationalityAr.Characterization
 
@@ -237,30 +238,6 @@ theorem A_add_twoShift (r : ℝ) (m : ℤ) :
     rw [floorSum_add_twoShift]
     exact dvd_add hdiv (by simpa [addend] using hadd)
 
-/-- Reflection through `0` for irrational parameters. -/
-private theorem mul_irrational_not_int {α : ℝ} (hirr : IsIrrational α)
-    {k : ℕ} (hkpos : 0 < k) :
-    ∀ m : ℤ, (k : ℝ) * α ≠ (m : ℝ) := by
-  intro m hm
-  apply hirr
-  refine ⟨(m : ℚ) / (k : ℚ), ?_⟩
-  have hkR : (k : ℝ) ≠ 0 := by exact_mod_cast Nat.ne_of_gt hkpos
-  have hcast : (((m : ℚ) / (k : ℚ) : ℚ) : ℝ) =
-      (m : ℝ) / (k : ℝ) := by norm_num
-  rw [hcast]
-  rw [div_eq_iff hkR]
-  rw [← hm]
-  ring
-
-private theorem floor_lt_of_not_int {x : ℝ}
-    (hnot : ∀ m : ℤ, x ≠ (m : ℝ)) :
-    (Int.floor x : ℝ) < x := by
-  have hle : (Int.floor x : ℝ) ≤ x := Int.floor_le x
-  have hne : (Int.floor x : ℝ) ≠ x := by
-    intro h
-    exact hnot (Int.floor x) h.symm
-  exact lt_of_le_of_ne hle hne
-
 private theorem floor_neg_of_not_int {x : ℝ}
     (hnot : ∀ m : ℤ, x ≠ (m : ℝ)) :
     Int.floor (-x) = -Int.floor x - 1 := by
@@ -328,6 +305,46 @@ theorem A_eq_of_mem_symmetryClass {α β : ℝ}
       A (-α + twoShift m) = A (-α) := A_add_twoShift (-α) m
       _ = A α := A_neg_of_irrational hαirr
 
+/-- The symmetry orbit preserves the literal irrationality-measure predicate. -/
+theorem HasIrrationalityMeasure_of_mem_symmetryClass
+    {α β μ : ℝ}
+    (hμ : HasIrrationalityMeasure α μ)
+    (hβ : β ∈ symmetryClass α) :
+    HasIrrationalityMeasure β μ := by
+  rcases hβ with ⟨m, h | h⟩
+  · rw [h]
+    simpa [twoShift, Int.cast_mul] using hμ.add_int (2 * m)
+  · rw [h]
+    simpa [twoShift, Int.cast_mul] using hμ.neg_add_int (2 * m)
+
+/-- The additive-energy exponent of the actual floor-sum truncations is
+constant on a symmetry class. -/
+theorem floorSumAAdditiveEnergyExponent_eq_of_mem_symmetryClass
+    {α β : ℝ}
+    (hαirr : IsIrrational α)
+    (hβ : β ∈ symmetryClass α) :
+    floorSumAAdditiveEnergyExponent β =
+      floorSumAAdditiveEnergyExponent α :=
+  floorSumAAdditiveEnergyExponent_congr
+    (A_eq_of_mem_symmetryClass hαirr hβ)
+
+/-- The public `[1,N]` additive-energy exponent is also constant on a
+symmetry class. -/
+theorem floorSumATruncIccAdditiveEnergyExponent_eq_of_mem_symmetryClass
+    {α β : ℝ}
+    (hαirr : IsIrrational α)
+    (hβ : β ∈ symmetryClass α) :
+    floorSumATruncIccAdditiveEnergyExponent β =
+      floorSumATruncIccAdditiveEnergyExponent α := by
+  calc
+    floorSumATruncIccAdditiveEnergyExponent β =
+        floorSumAAdditiveEnergyExponent β := by
+      rw [floorSumATruncIccAdditiveEnergyExponent_eq_floorSumAAdditiveEnergyExponent]
+    _ = floorSumAAdditiveEnergyExponent α :=
+      floorSumAAdditiveEnergyExponent_eq_of_mem_symmetryClass hαirr hβ
+    _ = floorSumATruncIccAdditiveEnergyExponent α := by
+      rw [floorSumATruncIccAdditiveEnergyExponent_eq_floorSumAAdditiveEnergyExponent]
+
 /-- Orbit transitivity for the explicit symmetry class. -/
 theorem symmetryClass_trans {α β γ : ℝ}
     (hβ : β ∈ symmetryClass α) (hγ : γ ∈ symmetryClass β) :
@@ -363,6 +380,20 @@ theorem symmetryClass_symm {α β : ℝ}
   · refine ⟨m, Or.inr ?_⟩
     rw [hβ]
     simp [twoShift]
+
+/-- The literal irrationality-measure predicate is invariant along a symmetry
+orbit. -/
+theorem HasIrrationalityMeasure_iff_of_mem_symmetryClass
+    {α β μ : ℝ}
+    (hβ : β ∈ symmetryClass α) :
+    HasIrrationalityMeasure β μ ↔
+      HasIrrationalityMeasure α μ := by
+  constructor
+  · intro hμ
+    exact HasIrrationalityMeasure_of_mem_symmetryClass hμ
+      (symmetryClass_symm hβ)
+  · intro hμ
+    exact HasIrrationalityMeasure_of_mem_symmetryClass hμ hβ
 
 /-- Every irrational real has a representative in `[1,2]` with the same
 `A`-set and in the same explicit symmetry orbit. -/
@@ -431,6 +462,319 @@ theorem exists_normalized_representative (r : ℝ) (hr : IsIrrational r) :
       dsimp [r₀, t, twoShift]
       norm_num
       ring
+
+/-- Every irrational has a normalized representative in `[1,2]` with the same
+actual floor-sum additive-energy exponent, and irrationality-measure predicates
+transfer from the representative back to the original real. -/
+theorem exists_normalized_representative_additiveEnergy_measure
+    (r : ℝ) (hr : IsIrrational r) :
+    ∃ r₀ : ℝ,
+      r₀ ∈ Set.Icc (1 : ℝ) 2 ∧
+        A r₀ = A r ∧
+          floorSumAAdditiveEnergyExponent r =
+            floorSumAAdditiveEnergyExponent r₀ ∧
+            (∀ μ : ℝ,
+              HasIrrationalityMeasure r₀ μ →
+                HasIrrationalityMeasure r μ) := by
+  rcases exists_normalized_representative r hr with
+    ⟨r₀, hr₀I, hAr₀, hr_mem⟩
+  refine ⟨r₀, hr₀I, hAr₀, ?_, ?_⟩
+  · exact floorSumAAdditiveEnergyExponent_congr hAr₀.symm
+  · intro μ hμ
+    exact HasIrrationalityMeasure_of_mem_symmetryClass hμ hr_mem
+
+/-- Symmetric version of the normalized representative package: the normalized
+representative has the same `A`-set, the same floor-sum additive-energy
+exponent, and exactly the same literal irrationality-measure predicates. -/
+theorem exists_normalized_representative_additiveEnergy_measure_iff
+    (r : ℝ) (hr : IsIrrational r) :
+    ∃ r₀ : ℝ,
+      r₀ ∈ Set.Icc (1 : ℝ) 2 ∧
+        IsIrrational r₀ ∧
+          A r₀ = A r ∧
+            floorSumAAdditiveEnergyExponent r =
+              floorSumAAdditiveEnergyExponent r₀ ∧
+              (∀ μ : ℝ,
+                HasIrrationalityMeasure r μ ↔
+                  HasIrrationalityMeasure r₀ μ) := by
+  rcases exists_normalized_representative r hr with
+    ⟨r₀, hr₀I, hAr₀, hr_mem⟩
+  refine ⟨r₀, hr₀I, ?_, hAr₀, ?_, ?_⟩
+  · exact irrational_of_A_eq_irrational hr hAr₀
+  · exact floorSumAAdditiveEnergyExponent_congr hAr₀.symm
+  · intro μ
+    exact HasIrrationalityMeasure_iff_of_mem_symmetryClass hr_mem
+
+/-- Arbitrary-parameter version of the zero additive-energy exponent bridge.
+
+After normalizing an irrational parameter into `[1,2]`, any continued-fraction
+coefficient model for the normalized representative transfers the
+zero-exponent/measure-`2` equivalence back to the original floor-sum set. -/
+theorem exists_normalized_representative_additiveEnergy_zero_iff_cf_measure
+    (r : ℝ) (hr : IsIrrational r) :
+    ∃ r₀ : ℝ,
+      r₀ ∈ Set.Icc (1 : ℝ) 2 ∧
+        IsIrrational r₀ ∧
+          A r₀ = A r ∧
+            (∀ {a : ℕ → ℕ} {μ : ℝ},
+              IsSimpleCFExpansion r₀ a →
+                HasCanonicalBlockGrowthFormula a →
+                  HasIrrationalityMeasureFromCF a μ →
+                    μ ≠ 1 →
+                      (floorSumAAdditiveEnergyExponent r = 0 ↔ μ = 2)) := by
+  rcases exists_normalized_representative r hr with
+    ⟨r₀, hr₀I, hAr₀, _hr_mem⟩
+  have hr₀irr : IsIrrational r₀ :=
+    irrational_of_A_eq_irrational hr hAr₀
+  refine ⟨r₀, hr₀I, hr₀irr, hAr₀, ?_⟩
+  intro a μ hcf hblock hμ hμne
+  have hr₀pos : 0 < r₀ :=
+    lt_of_lt_of_le (by norm_num : (0 : ℝ) < 1) hr₀I.1
+  exact
+    floorSumAAdditiveEnergyExponent_eq_zero_iff_cf_measure_eq_two_of_A_eq
+      hAr₀ hr₀pos hr₀irr hcf hblock hμ hμne
+
+/-- Public `[1,N]` truncation version of
+`exists_normalized_representative_additiveEnergy_zero_iff_cf_measure`. -/
+theorem exists_normalized_representative_truncIcc_additiveEnergy_zero_iff_cf_measure
+    (r : ℝ) (hr : IsIrrational r) :
+    ∃ r₀ : ℝ,
+      r₀ ∈ Set.Icc (1 : ℝ) 2 ∧
+        IsIrrational r₀ ∧
+          A r₀ = A r ∧
+            (∀ {a : ℕ → ℕ} {μ : ℝ},
+              IsSimpleCFExpansion r₀ a →
+                HasCanonicalBlockGrowthFormula a →
+                  HasIrrationalityMeasureFromCF a μ →
+                    μ ≠ 1 →
+                      (floorSumATruncIccAdditiveEnergyExponent r = 0 ↔
+                        μ = 2)) := by
+  rcases exists_normalized_representative_additiveEnergy_zero_iff_cf_measure
+      r hr with
+    ⟨r₀, hr₀I, hr₀irr, hAr₀, hbridge⟩
+  refine ⟨r₀, hr₀I, hr₀irr, hAr₀, ?_⟩
+  intro a μ hcf hblock hμ hμne
+  rw [floorSumATruncIccAdditiveEnergyExponent_eq_floorSumAAdditiveEnergyExponent]
+  exact hbridge hcf hblock hμ hμne
+
+/-- Literal-measure version of the normalized `[1,N]` additive-energy bridge.
+
+This is the formally available version of the writeup's final implication:
+once the normalized representative's continued-fraction coefficients satisfy
+the block-growth formula and the CF-computed irrationality-measure theorem,
+the zero additive-energy exponent for `A_r ∩ [1,N]` is equivalent to the
+literal statement that `r` has irrationality measure `2`. -/
+theorem floorSumATruncIccAdditiveEnergyExponent_eq_zero_iff_hasIrrationalityMeasure_two_of_mem_symmetryClass
+    {α β : ℝ} {a : ℕ → ℕ}
+    (hαpos : 0 < α)
+    (hαirr : IsIrrational α)
+    (hβ : β ∈ symmetryClass α)
+    (hcf : IsSimpleCFExpansion α a)
+    (hblock : HasCanonicalBlockGrowthFormula a)
+    (hmetric :
+      HasIrrationalityMeasure α (2 + partialQuotientGrowthTau a))
+    (hden : 1 + partialQuotientGrowthTau a ≠ 0) :
+    floorSumATruncIccAdditiveEnergyExponent β = 0 ↔
+      HasIrrationalityMeasure β 2 := by
+  have hExp :
+      floorSumATruncIccAdditiveEnergyExponent β =
+        floorSumATruncIccAdditiveEnergyExponent α :=
+    floorSumATruncIccAdditiveEnergyExponent_eq_of_mem_symmetryClass
+      hαirr hβ
+  have hμiff :
+      HasIrrationalityMeasure β 2 ↔
+        HasIrrationalityMeasure α 2 :=
+    HasIrrationalityMeasure_iff_of_mem_symmetryClass hβ
+  rw [hExp, hμiff]
+  exact
+    floorSumATruncIccAdditiveEnergyExponent_eq_zero_iff_hasIrrationalityMeasure_two
+      hαpos hαirr hcf hblock hmetric hden
+
+/-- Arbitrary irrational parameters reduce to the normalized positive case for
+the public `[1,N]` additive-energy exponent and literal irrationality measure.
+
+The remaining mathematical input is exactly the classical CF metric bridge for
+the normalized representative: `HasIrrationalityMeasure r₀ (2 + tau)`. -/
+theorem exists_normalized_representative_truncIcc_additiveEnergy_zero_iff_hasIrrationalityMeasure_two
+    (r : ℝ) (hr : IsIrrational r) :
+    ∃ r₀ : ℝ,
+      r₀ ∈ Set.Icc (1 : ℝ) 2 ∧
+        IsIrrational r₀ ∧
+          A r₀ = A r ∧
+            (∀ {a : ℕ → ℕ},
+              IsSimpleCFExpansion r₀ a →
+                HasCanonicalBlockGrowthFormula a →
+                  HasIrrationalityMeasure r₀
+                    (2 + partialQuotientGrowthTau a) →
+                    1 + partialQuotientGrowthTau a ≠ 0 →
+                      (floorSumATruncIccAdditiveEnergyExponent r = 0 ↔
+                        HasIrrationalityMeasure r 2)) := by
+  rcases exists_normalized_representative r hr with
+    ⟨r₀, hr₀I, hAr₀, hr_mem⟩
+  have hr₀irr : IsIrrational r₀ :=
+    irrational_of_A_eq_irrational hr hAr₀
+  have hr₀pos : 0 < r₀ :=
+    lt_of_lt_of_le (by norm_num : (0 : ℝ) < 1) hr₀I.1
+  refine ⟨r₀, hr₀I, hr₀irr, hAr₀, ?_⟩
+  intro a hcf hblock hmetric hden
+  exact
+    floorSumATruncIccAdditiveEnergyExponent_eq_zero_iff_hasIrrationalityMeasure_two_of_mem_symmetryClass
+      hr₀pos hr₀irr hr_mem hcf hblock hmetric hden
+
+/-- Finite partial-quotient-growth version of the arbitrary-parameter
+normalization theorem.  The boundedness hypothesis discharges the CF metric
+and block-growth inputs for the normalized representative. -/
+theorem floorSumATruncIccAdditiveEnergyExponent_eq_zero_iff_hasIrrationalityMeasure_two_of_mem_symmetryClass_of_tau_bounded
+    {α β : ℝ} {a : ℕ → ℕ}
+    (hαpos : 0 < α)
+    (hαirr : IsIrrational α)
+    (hβ : β ∈ symmetryClass α)
+    (hcf : IsSimpleCFExpansion α a)
+    (hbounded :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) Filter.atTop
+        (pqLogRatio a)) :
+    floorSumATruncIccAdditiveEnergyExponent β = 0 ↔
+      HasIrrationalityMeasure β 2 := by
+  have hExp :
+      floorSumATruncIccAdditiveEnergyExponent β =
+        floorSumATruncIccAdditiveEnergyExponent α :=
+    floorSumATruncIccAdditiveEnergyExponent_eq_of_mem_symmetryClass
+      hαirr hβ
+  have hμiff :
+      HasIrrationalityMeasure β 2 ↔
+        HasIrrationalityMeasure α 2 :=
+    HasIrrationalityMeasure_iff_of_mem_symmetryClass hβ
+  rw [hExp, hμiff]
+  exact
+    floorSumATruncIccAdditiveEnergyExponent_eq_zero_iff_hasIrrationalityMeasure_two_of_tau_bounded
+      hαpos hαirr hcf hbounded
+
+/-- Arbitrary irrational parameters reduce to the normalized finite-growth
+case for the public `[1,N]` additive-energy exponent. -/
+theorem exists_normalized_representative_truncIcc_additiveEnergy_zero_iff_hasIrrationalityMeasure_two_of_tau_bounded
+    (r : ℝ) (hr : IsIrrational r) :
+    ∃ r₀ : ℝ,
+      r₀ ∈ Set.Icc (1 : ℝ) 2 ∧
+        IsIrrational r₀ ∧
+          A r₀ = A r ∧
+            (∀ {a : ℕ → ℕ},
+              IsSimpleCFExpansion r₀ a →
+                Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) Filter.atTop
+                  (pqLogRatio a) →
+                  (floorSumATruncIccAdditiveEnergyExponent r = 0 ↔
+                    HasIrrationalityMeasure r 2)) := by
+  rcases exists_normalized_representative r hr with
+    ⟨r₀, hr₀I, hAr₀, hr_mem⟩
+  have hr₀irr : IsIrrational r₀ :=
+    irrational_of_A_eq_irrational hr hAr₀
+  have hr₀pos : 0 < r₀ :=
+    lt_of_lt_of_le (by norm_num : (0 : ℝ) < 1) hr₀I.1
+  refine ⟨r₀, hr₀I, hr₀irr, hAr₀, ?_⟩
+  intro a hcf hbounded
+  exact
+    floorSumATruncIccAdditiveEnergyExponent_eq_zero_iff_hasIrrationalityMeasure_two_of_mem_symmetryClass_of_tau_bounded
+      hr₀pos hr₀irr hr_mem hcf hbounded
+
+/-- Arbitrary irrational version of the additive-energy/measure-`2`
+equivalence, stated in the project's logarithmic-exponent language for the
+public truncations `A r ∩ [1,N]`. -/
+theorem floorSumATruncIccAdditiveEnergyExponent_eq_zero_iff_hasIrrationalityMeasure_two_of_irrational
+    {r : ℝ} (hr : IsIrrational r) :
+    floorSumATruncIccAdditiveEnergyExponent r = 0 ↔
+      HasIrrationalityMeasure r 2 := by
+  rcases exists_normalized_representative r hr with
+    ⟨r₀, hr₀I, hAr₀, hr_mem⟩
+  have hr₀irr : IsIrrational r₀ :=
+    irrational_of_A_eq_irrational hr hAr₀
+  have hr₀pos : 0 < r₀ :=
+    lt_of_lt_of_le (by norm_num : (0 : ℝ) < 1) hr₀I.1
+  rcases exists_simpleCFExpansion_of_irrational hr₀pos hr₀irr with
+    ⟨a, hcf⟩
+  have hExp :
+      floorSumATruncIccAdditiveEnergyExponent r =
+        floorSumATruncIccAdditiveEnergyExponent r₀ :=
+    floorSumATruncIccAdditiveEnergyExponent_eq_of_mem_symmetryClass
+      hr₀irr hr_mem
+  have hμiff :
+      HasIrrationalityMeasure r 2 ↔
+        HasIrrationalityMeasure r₀ 2 :=
+    HasIrrationalityMeasure_iff_of_mem_symmetryClass hr_mem
+  rw [hExp, hμiff]
+  exact
+    floorSumATruncIccAdditiveEnergyExponent_eq_zero_iff_hasIrrationalityMeasure_two_of_simpleCFExpansion
+      hr₀pos hr₀irr hcf
+
+/-- Project-language stand-in for
+`E(A_r ∩ [1,N]) = N^{o(1)}`: the logarithmic additive-energy exponent is
+zero. -/
+def FloorSumATruncIccAdditiveEnergySubpolynomialExponent (r : ℝ) : Prop :=
+  floorSumATruncIccAdditiveEnergyExponent r = 0
+
+/-- Arbitrary irrational version in the prose theorem's sub-polynomial
+language. -/
+theorem floorSumATruncIccAdditiveEnergySubpolynomialExponent_iff_hasIrrationalityMeasure_two_of_irrational
+    {r : ℝ} (hr : IsIrrational r) :
+    FloorSumATruncIccAdditiveEnergySubpolynomialExponent r ↔
+      HasIrrationalityMeasure r 2 := by
+  simpa [FloorSumATruncIccAdditiveEnergySubpolynomialExponent] using
+    floorSumATruncIccAdditiveEnergyExponent_eq_zero_iff_hasIrrationalityMeasure_two_of_irrational
+      hr
+
+/-- Refined finite-regime formula transported along a symmetry class.
+
+The boundedness assumption is the project's formal version of the finite
+partial-quotient-growth regime for the chosen normalized continued-fraction
+coefficients. -/
+theorem floorSumATruncIccAdditiveEnergyExponent_eq_three_mul_irrationalityMeasure_formula_of_mem_symmetryClass_of_bounded
+    {α β μ : ℝ} {a : ℕ → ℕ}
+    (hαpos : 0 < α)
+    (hαirr : IsIrrational α)
+    (hβ : β ∈ symmetryClass α)
+    (hcf : IsSimpleCFExpansion α a)
+    (hbounded :
+      Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) Filter.atTop
+        (pqLogRatio a))
+    (hμ : HasIrrationalityMeasure β μ) :
+    floorSumATruncIccAdditiveEnergyExponent β =
+      3 * ((μ - 2) / (μ - 1)) := by
+  have hExp :
+      floorSumATruncIccAdditiveEnergyExponent β =
+        floorSumATruncIccAdditiveEnergyExponent α :=
+    floorSumATruncIccAdditiveEnergyExponent_eq_of_mem_symmetryClass
+      hαirr hβ
+  have hμα : HasIrrationalityMeasure α μ :=
+    (HasIrrationalityMeasure_iff_of_mem_symmetryClass hβ).mp hμ
+  rw [hExp]
+  exact
+    floorSumATruncIccAdditiveEnergyExponent_eq_three_mul_irrationalityMeasure_formula_of_bounded
+      hαpos hαirr hcf hbounded hμα
+
+/-- Arbitrary irrational refined exponent formula after normalization, in the
+finite partial-quotient-growth regime for the normalized representative. -/
+theorem exists_normalized_representative_truncIcc_additiveEnergy_formula_of_bounded
+    {r μ : ℝ} (hr : IsIrrational r)
+    (hμ : HasIrrationalityMeasure r μ) :
+    ∃ r₀ : ℝ,
+      r₀ ∈ Set.Icc (1 : ℝ) 2 ∧
+        IsIrrational r₀ ∧
+          A r₀ = A r ∧
+            (∀ {a : ℕ → ℕ},
+              IsSimpleCFExpansion r₀ a →
+                Filter.IsBoundedUnder (fun x y : ℝ => x ≤ y) Filter.atTop
+                  (pqLogRatio a) →
+                  floorSumATruncIccAdditiveEnergyExponent r =
+                    3 * ((μ - 2) / (μ - 1))) := by
+  rcases exists_normalized_representative r hr with
+    ⟨r₀, hr₀I, hAr₀, hr_mem⟩
+  have hr₀irr : IsIrrational r₀ :=
+    irrational_of_A_eq_irrational hr hAr₀
+  have hr₀pos : 0 < r₀ :=
+    lt_of_lt_of_le (by norm_num : (0 : ℝ) < 1) hr₀I.1
+  refine ⟨r₀, hr₀I, hr₀irr, hAr₀, ?_⟩
+  intro a hcf hbounded
+  exact
+    floorSumATruncIccAdditiveEnergyExponent_eq_three_mul_irrationalityMeasure_formula_of_mem_symmetryClass_of_bounded
+      hr₀pos hr₀irr hr_mem hcf hbounded hμ
 
 /-- If two irrational parameters have the same `A`-set, then they belong to
 the same explicit symmetry orbit. -/

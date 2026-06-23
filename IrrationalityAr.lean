@@ -6,10 +6,16 @@ import IrrationalityAr.RationalCase
 import IrrationalityAr.IrrationalCase
 import IrrationalityAr.Characterization
 import IrrationalityAr.ContinuedFractions
-import IrrationalityAr.Blocks
+import IrrationalityAr.CanonicalBlocks
 import IrrationalityAr.CanonicalBlockGrowth
 import IrrationalityAr.AdditiveBlockBridge
+import IrrationalityAr.CanonicalEntropyDissociation
+import IrrationalityAr.CanonicalEntropyDissociationCFBridge
 import IrrationalityAr.EulerContinuedFraction
+import IrrationalityAr.Ramanujan
 import IrrationalityAr.EquivalenceClass
 import IrrationalityAr.GapMonotonicity
+import IrrationalityAr.CountingConsequences
+import IrrationalityAr.CountingConsequencesCorollaries
+import IrrationalityAr.PiExternalAxioms
 import IrrationalityAr.Variants

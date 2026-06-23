@@ -1548,11 +1548,6 @@ theorem exp_one_hasIrrationalityMeasure_two_of_denominatorRatio_one_bridge
     exp_one_isSimpleCFExpansion_eulerCoeff
     eulerCoeff_denominatorRatioExponent_eq_one
 
-theorem exp_one_hasIrrationalityMeasure_two_of_denominatorRatioExponent :
-    HasIrrationalityMeasure (Real.exp 1) 2 :=
-  exp_one_hasIrrationalityMeasure_two_of_denominatorRatio_one_bridge
-    irrationalityMeasure_eq_two_of_denominatorRatioExponent_eq_one
-
 theorem exp_one_hasIrrationalityMeasure_two :
     HasIrrationalityMeasure (Real.exp 1) 2 :=
   irrationalityMeasure_eq_two_of_denominatorRatio_tendsto_one
