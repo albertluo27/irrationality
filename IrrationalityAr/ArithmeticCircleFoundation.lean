@@ -1,4 +1,1357 @@
-import IrrationalityAr.IrrationalCase
+-- Auto-generated grouped merge from original modules
+
+import Mathlib
+
+-- BEGIN: Basic.lean
+
+open scoped BigOperators
+
+namespace IrrationalityAr
+
+/-- The summand appearing in the project: `⌊n r⌋`. -/
+noncomputable def floorMul (r : ℝ) (n : ℕ) : ℤ :=
+  Int.floor ((n : ℝ) * r)
+
+/-- `F_r(n) = ∑_{k=1}^n ⌊k r⌋`. -/
+noncomputable def floorSum (r : ℝ) (n : ℕ) : ℤ :=
+  ∑ k ∈ Finset.Icc 1 n, floorMul r k
+
+/-- `A_r = {n ≥ 1 : n ∣ F_r(n)}`. -/
+def A (r : ℝ) : Set ℕ :=
+  {n | 0 < n ∧ (n : ℤ) ∣ floorSum r n}
+
+/-- A real number is rational when it is the image of a rational number. -/
+def IsRational (r : ℝ) : Prop :=
+  ∃ q : ℚ, (q : ℝ) = r
+
+/-- The negation of `IsRational`. -/
+def IsIrrational (r : ℝ) : Prop :=
+  ¬ IsRational r
+
+theorem isIrrational_of_irrational {x : ℝ} (hx : Irrational x) :
+    IsIrrational x := by
+  intro hrat
+  exact hx hrat
+
+theorem mul_irrational_not_int {α : ℝ} (hirr : IsIrrational α)
+    {k : ℕ} (hkpos : 0 < k) :
+    ∀ m : ℤ, (k : ℝ) * α ≠ (m : ℝ) := by
+  intro m hm
+  apply hirr
+  refine ⟨(m : ℚ) / (k : ℚ), ?_⟩
+  have hkR : (k : ℝ) ≠ 0 := by exact_mod_cast Nat.ne_of_gt hkpos
+  have hcast :
+      (((m : ℚ) / (k : ℚ) : ℚ) : ℝ) =
+        (m : ℝ) / (k : ℝ) := by
+    norm_num
+  rw [hcast]
+  rw [div_eq_iff hkR]
+  rw [← hm]
+  ring
+
+theorem floor_lt_of_not_int {x : ℝ}
+    (hnot : ∀ m : ℤ, x ≠ (m : ℝ)) :
+    (Int.floor x : ℝ) < x := by
+  have hle : (Int.floor x : ℝ) ≤ x := Int.floor_le x
+  have hne : (Int.floor x : ℝ) ≠ x := by
+    intro h
+    exact hnot (Int.floor x) h.symm
+  exact lt_of_le_of_ne hle hne
+
+theorem card_filter_range_succ
+    (P : ℕ → Prop) [DecidablePred P] (N : ℕ) :
+    ((Finset.range (N + 1)).filter P).card =
+      ((Finset.range N).filter P).card + (if P N then 1 else 0) := by
+  classical
+  by_cases h : P N
+  · simp [Finset.range_add_one, Finset.filter_insert, h]
+  · simp [Finset.range_add_one, Finset.filter_insert, h]
+
+@[simp] theorem mem_A_iff {r : ℝ} {n : ℕ} :
+    n ∈ A r ↔ 0 < n ∧ (n : ℤ) ∣ floorSum r n :=
+  Iff.rfl
+
+@[simp] theorem zero_not_mem_A (r : ℝ) :
+    0 ∉ A r := by
+  simp [A]
+
+end IrrationalityAr
+-- END: Basic.lean
+
+-- BEGIN: Progressions.lean
+
+namespace IrrationalityAr
+
+/-- `S` contains an infinite arithmetic progression with positive step. -/
+def ContainsInfiniteAP (S : Set ℕ) : Prop :=
+  ∃ a d : ℕ, 0 < d ∧ ∀ k : ℕ, a + k * d ∈ S
+
+/-- Beyond a cutoff, membership in `S` is exactly one congruence class modulo a
+positive modulus. This is the precise meaning of “eventually an arithmetic
+progression” used in the project. -/
+def IsEventuallyAP (S : Set ℕ) : Prop :=
+  ∃ a d N : ℕ, 0 < d ∧ ∀ n : ℕ, N ≤ n → (n ∈ S ↔ n % d = a % d)
+
+/-- A tail congruence class contains an infinite arithmetic progression.
+
+This proof is intentionally elementary. It is independent of the floor-sum
+construction and can be checked before the number-theoretic layers. -/
+theorem eventuallyAP_containsInfiniteAP {S : Set ℕ} (h : IsEventuallyAP S) :
+    ContainsInfiniteAP S := by
+  rcases h with ⟨a, d, N, hd, htail⟩
+  refine ⟨a + N * d, d, hd, ?_⟩
+  intro k
+  apply (htail (a + N * d + k * d) ?_).2
+  · rw [show a + N * d + k * d = a + d * (N + k) by ring]
+    exact Nat.add_mul_mod_self_left a d (N + k)
+  · have hN_le_Nd : N ≤ N * d := Nat.le_mul_of_pos_right N hd
+    omega
+
+end IrrationalityAr
+-- END: Progressions.lean
+
+-- BEGIN: FractionalParts.lean
+
+namespace IrrationalityAr
+
+/-- The fractional part of `q r`. -/
+noncomputable def fracMul (r : ℝ) (q : ℕ) : ℝ :=
+  Int.fract ((q : ℝ) * r)
+
+/-- `q` produces a new strict minimum among the positive-index fractional
+parts up to `q`. -/
+def IsLowerRecord (r : ℝ) (q : ℕ) : Prop :=
+  0 < q ∧ ∀ k : ℕ, 0 < k → k < q → fracMul r q < fracMul r k
+
+/-- `q` produces a new strict maximum among the positive-index fractional
+parts up to `q`. -/
+def IsUpperRecord (r : ℝ) (q : ℕ) : Prop :=
+  0 < q ∧ ∀ k : ℕ, 0 < k → k < q → fracMul r k < fracMul r q
+
+end IrrationalityAr
+-- END: FractionalParts.lean
+
+-- BEGIN: Pairing.lean
+
+open scoped BigOperators
+
+namespace IrrationalityAr
+
+/-- The number of earlier fractional parts strictly above the fractional part
+of `q r`:
+
+`C_r(q) = #{k : 1 ≤ k < q and {q r} < {k r}}`.
+-/
+noncomputable def aboveCount (r : ℝ) (q : ℕ) : ℕ := by
+  classical
+  exact ((Finset.Ico 1 q).filter fun k => fracMul r q < fracMul r k).card
+
+/-- The easy range estimate `C_r(q) ≤ q - 1`. -/
+theorem aboveCount_le_pred (r : ℝ) (q : ℕ) :
+    aboveCount r q ≤ q - 1 := by
+  classical
+  rw [aboveCount]
+  calc
+    ((Finset.Ico 1 q).filter fun k => fracMul r q < fracMul r k).card
+        ≤ (Finset.Ico 1 q).card := Finset.card_filter_le _ _
+    _ = q - 1 := by simp
+
+/-- The defect in a paired floor sum.  It is `1` exactly when the fractional
+part of `q r` is strictly smaller than the fractional part of `k r`. -/
+noncomputable def pairDefect (r : ℝ) (q k : ℕ) : ℤ :=
+  if fracMul r q < fracMul r k then 1 else 0
+
+/-- The floor of a difference of two fractional parts is either `-1` or `0`.
+This is the local arithmetic fact behind the pairing argument. -/
+theorem floor_fract_sub_fract (x y : ℝ) :
+    Int.floor (Int.fract x - Int.fract y) =
+      if Int.fract x < Int.fract y then -1 else 0 := by
+  by_cases h : Int.fract x < Int.fract y
+  · rw [if_pos h]
+    apply Int.floor_eq_iff.mpr
+    constructor
+    · norm_num
+      linarith [Int.fract_nonneg x, Int.fract_lt_one y]
+    · norm_num
+      linarith
+  · rw [if_neg h]
+    apply Int.floor_eq_zero_iff.mpr
+    constructor
+    · exact sub_nonneg.mpr (le_of_not_gt h)
+    · linarith [Int.fract_lt_one x, Int.fract_nonneg y]
+
+/-- Expand the floor of a difference into the difference of the floors and a
+single possible borrow. -/
+theorem floor_sub_eq_floor_sub_floor_add_defect (x y : ℝ) :
+    Int.floor (x - y) =
+      Int.floor x - Int.floor y +
+        (if Int.fract x < Int.fract y then -1 else 0) := by
+  calc
+    Int.floor (x - y) =
+        Int.floor ((((Int.floor x - Int.floor y : ℤ) : ℝ)) +
+          (Int.fract x - Int.fract y)) := by
+      congr 1
+      simp only [Int.fract]
+      push_cast
+      ring
+    _ = (Int.floor x - Int.floor y) +
+          Int.floor (Int.fract x - Int.fract y) := by
+      rw [Int.floor_intCast_add]
+    _ = _ := by
+      rw [floor_fract_sub_fract]
+
+/-- The pointwise paired-floor identity. -/
+theorem floorMul_add_floorMul_sub (r : ℝ) {q k : ℕ} (hk : k ≤ q) :
+    floorMul r k + floorMul r (q - k) =
+      floorMul r q - pairDefect r q k := by
+  unfold floorMul pairDefect fracMul
+  have hcast : (((q - k : ℕ) : ℝ) * r) = (q : ℝ) * r - (k : ℝ) * r := by
+    rw [Nat.cast_sub hk]
+    ring
+  rw [hcast, floor_sub_eq_floor_sub_floor_add_defect]
+  by_cases h : Int.fract ((q : ℝ) * r) < Int.fract ((k : ℝ) * r)
+  · simp only [h, if_true]
+    ring_nf
+  · simp only [h, if_false]
+    ring_nf
+
+/-- Replacing the original closed interval by a half-open interval is useful
+for the reflection argument. -/
+theorem floorSum_pred_eq_sum_Ico (r : ℝ) (q : ℕ) :
+    floorSum r (q - 1) = ∑ k ∈ Finset.Ico 1 q, floorMul r k := by
+  unfold floorSum
+  apply Finset.sum_congr
+  · ext k
+    simp only [Finset.mem_Icc, Finset.mem_Ico]
+    omega
+  · intro k hk
+    rfl
+
+/-- The involution `k ↦ q-k` reverses the interval `1 ≤ k < q`. -/
+theorem sum_floorMul_reflect (r : ℝ) (q : ℕ) :
+    (∑ k ∈ Finset.Ico 1 q, floorMul r (q - k)) =
+      ∑ k ∈ Finset.Ico 1 q, floorMul r k := by
+  simpa using
+    (Finset.sum_Ico_reflect (floorMul r) 1 (show q ≤ q + 1 by omega))
+
+/-- Summing the `0`-`1` defects counts exactly the filtered interval used in
+`aboveCount`. -/
+theorem sum_pairDefect_eq_cast_aboveCount (r : ℝ) (q : ℕ) :
+    (∑ k ∈ Finset.Ico 1 q, pairDefect r q k) = (aboveCount r q : ℤ) := by
+  classical
+  rw [aboveCount]
+  change (∑ k ∈ Finset.Ico 1 q,
+      (if fracMul r q < fracMul r k then (1 : ℤ) else 0)) =
+    (((Finset.Ico 1 q).filter fun k => fracMul r q < fracMul r k).card : ℤ)
+  simp
+
+/-!
+# Shared pairing identity
+
+For `q = n + 1`, pair the summands indexed by `k` and `q - k`.
+For every `1 ≤ k < q`,
+
+`⌊k r⌋ + ⌊(q-k) r⌋ = ⌊q r⌋ - 1_{ {q r} < {k r} }`.
+
+Summing gives
+
+`2 F_r(q-1) = (q-1) ⌊q r⌋ - C_r(q)`.
+-/
+theorem two_mul_floorSum_pred_eq (r : ℝ) (q : ℕ) :
+    2 * floorSum r (q - 1) =
+      ((q - 1 : ℕ) : ℤ) * floorMul r q - (aboveCount r q : ℤ) := by
+  calc
+    2 * floorSum r (q - 1) =
+        (∑ k ∈ Finset.Ico 1 q, floorMul r k) +
+          ∑ k ∈ Finset.Ico 1 q, floorMul r (q - k) := by
+      rw [sum_floorMul_reflect, floorSum_pred_eq_sum_Ico]
+      ring
+    _ = ∑ k ∈ Finset.Ico 1 q,
+          (floorMul r k + floorMul r (q - k)) := by
+      rw [Finset.sum_add_distrib]
+    _ = ∑ k ∈ Finset.Ico 1 q,
+          (floorMul r q - pairDefect r q k) := by
+      apply Finset.sum_congr rfl
+      intro k hk
+      exact floorMul_add_floorMul_sub r (by
+        have := (Finset.mem_Ico.mp hk).2
+        omega)
+    _ = ((q - 1 : ℕ) : ℤ) * floorMul r q - (aboveCount r q : ℤ) := by
+      rw [Finset.sum_sub_distrib, sum_pairDefect_eq_cast_aboveCount]
+      simp
+
+/-- Pairing identity: upper endpoint plus even paired floor implies
+membership in `A_r`. -/
+theorem mem_A_of_aboveCount_zero_and_even_floor {r : ℝ} {n : ℕ}
+    (hn : 0 < n) (hC : aboveCount r (n + 1) = 0)
+    (heven : Even (floorMul r (n + 1))) :
+    n ∈ A r := by
+  rcases heven with ⟨z, hz⟩
+  have hpair :
+      2 * floorSum r n =
+        (n : ℤ) * floorMul r (n + 1) - (aboveCount r (n + 1) : ℤ) := by
+    simpa using two_mul_floorSum_pred_eq r (n + 1)
+  have hpair0 : 2 * floorSum r n = (n : ℤ) * floorMul r (n + 1) := by
+    simpa [hC] using hpair
+  refine (mem_A_iff).mpr ⟨hn, ?_⟩
+  refine ⟨z, ?_⟩
+  apply mul_left_cancel₀ (show (2 : ℤ) ≠ 0 by norm_num)
+  calc
+    2 * floorSum r n = (n : ℤ) * floorMul r (n + 1) := hpair0
+    _ = (n : ℤ) * (z + z) := by rw [hz]
+    _ = 2 * ((n : ℤ) * z) := by ring
+
+/-- Pairing identity: membership at the upper endpoint forces the paired floor
+to be even. -/
+theorem even_floorMul_of_mem_A_and_aboveCount_zero {r : ℝ} {n : ℕ}
+    (hn : 0 < n) (hA : n ∈ A r)
+    (hC : aboveCount r (n + 1) = 0) :
+    Even (floorMul r (n + 1)) := by
+  rcases (mem_A_iff.mp hA).2 with ⟨z, hz⟩
+  have hpair :
+      2 * floorSum r n =
+        (n : ℤ) * floorMul r (n + 1) - (aboveCount r (n + 1) : ℤ) := by
+    simpa using two_mul_floorSum_pred_eq r (n + 1)
+  have hpair0 : 2 * floorSum r n = (n : ℤ) * floorMul r (n + 1) := by
+    simpa [hC] using hpair
+  have hnz : (n : ℤ) ≠ 0 := by exact_mod_cast (Nat.ne_of_gt hn)
+  have hfloor : floorMul r (n + 1) = z + z := by
+    apply mul_left_cancel₀ hnz
+    calc
+      (n : ℤ) * floorMul r (n + 1) = 2 * floorSum r n := hpair0.symm
+      _ = 2 * ((n : ℤ) * z) := by rw [hz]
+      _ = (n : ℤ) * (z + z) := by ring
+  exact ⟨z, hfloor⟩
+
+/-- A nonnegative integer multiple of a positive natural `n`, bounded above by
+`n`, is one of the two endpoints. -/
+private theorem eq_zero_or_eq_of_int_dvd_of_le {n c : ℕ}
+    (hn : 0 < n) (hle : c ≤ n) (hdiv : (n : ℤ) ∣ (c : ℤ)) :
+    c = 0 ∨ c = n := by
+  rcases hdiv with ⟨z, hz⟩
+  have hnz : (0 : ℤ) < (n : ℤ) := by exact_mod_cast hn
+  have hcz_nonneg : (0 : ℤ) ≤ (c : ℤ) := by exact_mod_cast Nat.zero_le c
+  have hcz_le : (c : ℤ) ≤ (n : ℤ) := by exact_mod_cast hle
+  have hz_nonneg : 0 ≤ z := by
+    by_contra hnot
+    have hzneg : z < 0 := lt_of_not_ge hnot
+    have hprod_neg : (n : ℤ) * z < 0 :=
+      mul_neg_of_pos_of_neg hnz hzneg
+    linarith
+  have hz_le_one : z ≤ 1 := by
+    by_contra hnot
+    have htwo_le : (2 : ℤ) ≤ z := by omega
+    have hprod_le : (n : ℤ) * 2 ≤ (n : ℤ) * z :=
+      mul_le_mul_of_nonneg_left htwo_le (le_of_lt hnz)
+    have hn_lt_twice : (n : ℤ) < (n : ℤ) * 2 := by
+      nlinarith
+    nlinarith
+  have hz_cases : z = 0 ∨ z = 1 := by omega
+  rcases hz_cases with rfl | rfl
+  · left
+    have : (c : ℤ) = 0 := by simpa using hz
+    exact_mod_cast this
+  · right
+    have : (c : ℤ) = (n : ℤ) := by simpa using hz
+    exact_mod_cast this
+
+/-- If `n ∈ A_r`, the pairing identity forces `C_r(n+1)` to be an endpoint:
+either `0` or `n`. -/
+theorem aboveCount_eq_zero_or_eq_of_mem_A {r : ℝ} {n : ℕ}
+    (hn : 0 < n) (hA : n ∈ A r) :
+    aboveCount r (n + 1) = 0 ∨ aboveCount r (n + 1) = n := by
+  have hfloor_dvd : (n : ℤ) ∣ floorSum r n := (mem_A_iff.mp hA).2
+  have hpair :
+      2 * floorSum r n =
+        (n : ℤ) * floorMul r (n + 1) - (aboveCount r (n + 1) : ℤ) := by
+    simpa using two_mul_floorSum_pred_eq r (n + 1)
+  have htwice_dvd : (n : ℤ) ∣ 2 * floorSum r n := by
+    simpa [mul_comm] using (dvd_mul_of_dvd_left hfloor_dvd (2 : ℤ))
+  have hpair_dvd :
+      (n : ℤ) ∣
+        (n : ℤ) * floorMul r (n + 1) - (aboveCount r (n + 1) : ℤ) := by
+    rw [← hpair]
+    exact htwice_dvd
+  have hmain_dvd : (n : ℤ) ∣ (n : ℤ) * floorMul r (n + 1) := by
+    exact dvd_mul_right (n : ℤ) (floorMul r (n + 1))
+  have hcount_dvd : (n : ℤ) ∣ (aboveCount r (n + 1) : ℤ) := by
+    have hsub := dvd_sub hmain_dvd hpair_dvd
+    simpa using hsub
+  have hcount_le : aboveCount r (n + 1) ≤ n := by
+    simpa using aboveCount_le_pred r (n + 1)
+  exact eq_zero_or_eq_of_int_dvd_of_le hn hcount_le hcount_dvd
+
+end IrrationalityAr
+-- END: Pairing.lean
+
+-- BEGIN: RationalCase.lean
+
+namespace IrrationalityAr
+
+/-!
+# Rational case
+
+The formalization should use the shared pairing identity rather than a long
+closed formula for the entire floor sum.
+
+Let `r = a / b`, with `b > 0` and `gcd(|a|, b) = 1`. For `n ≥ b`, the first
+`n` fractional parts include every residue class modulo `b`. Therefore the
+endpoint alternative from `aboveCount_eq_zero_or_eq_of_mem_A` simplifies:
+
+* `C_r(n+1) = n` is impossible because one of the earlier fractional parts is
+  `0`;
+* `C_r(n+1) = 0` holds exactly when `{(n+1)r} = (b-1)/b`.
+
+The parity condition from the pairing identity then yields the explicit tail
+criterion
+
+`n ∈ A_(a/b) ↔ a * (n + 1) ≡ b - 1 [ZMOD 2*b]`.
+
+This congruence is a single residue class after dividing the modulus by the
+relevant gcd. It is the precise source of the eventual arithmetic progression.
+-/
+
+/-- Rational fractional parts are residues modulo the denominator. This is the
+formal version of the write-up's repeated use of residues `ka mod b`. -/
+private theorem fracMul_rat_eq_int_emod (a : ℤ) (b k : ℕ) :
+    fracMul ((a : ℝ) / (b : ℝ)) k =
+      (((a * (k : ℤ)) % (b : ℤ) : ℤ) : ℝ) / (b : ℝ) := by
+  unfold fracMul
+  have harg :
+      ((k : ℝ) * ((a : ℝ) / (b : ℝ))) =
+        (((a * (k : ℤ) : ℤ) : ℝ) / (b : ℝ)) := by
+    norm_num
+    ring
+  rw [harg]
+  simpa [mul_comm] using
+    (Int.fract_div_intCast_eq_div_intCast_mod
+      (k := ℝ) (m := a * (k : ℤ)) (n := b))
+
+/-- Rational floors are integer division by the denominator. -/
+private theorem floorMul_rat_eq_ediv (a : ℤ) (b k : ℕ) :
+    floorMul ((a : ℝ) / (b : ℝ)) k = (a * (k : ℤ)) / (b : ℤ) := by
+  unfold floorMul
+  have harg :
+      ((k : ℝ) * ((a : ℝ) / (b : ℝ))) =
+        (((a * (k : ℤ) : ℤ) : ℝ) / (b : ℝ)) := by
+    norm_num
+    ring
+  rw [harg]
+  rw [Int.floor_div_natCast]
+  rw [Int.floor_intCast]
+
+/-- A congruence modulo `b` fixes the fractional part of `k * a / b`. -/
+private theorem fracMul_rat_eq_of_modEq {a : ℤ} {b k j : ℕ}
+    (hj : j < b)
+    (hmod : a * (k : ℤ) ≡ (j : ℤ) [ZMOD (b : ℤ)]) :
+    fracMul ((a : ℝ) / (b : ℝ)) k = (j : ℝ) / (b : ℝ) := by
+  rw [fracMul_rat_eq_int_emod]
+  have hjmod : ((j : ℤ) % (b : ℤ)) = (j : ℤ) := by
+    exact Int.emod_eq_of_lt (by exact_mod_cast Nat.zero_le j) (by exact_mod_cast hj)
+  have hem : ((a * (k : ℤ)) % (b : ℤ)) = (j : ℤ) := by
+    simpa [Int.ModEq, hjmod] using hmod
+  rw [hem]
+  norm_num
+
+/-- The residue of `a * k` modulo `b` is always at most `b - 1`, hence so is
+the corresponding fractional part. -/
+private theorem fracMul_rat_le_top (a : ℤ) {b k : ℕ} (hb : 0 < b) :
+    fracMul ((a : ℝ) / (b : ℝ)) k ≤ ((b - 1 : ℕ) : ℝ) / (b : ℝ) := by
+  rw [fracMul_rat_eq_int_emod]
+  have hbz : 0 < (b : ℤ) := by exact_mod_cast hb
+  have hleZ : (a * (k : ℤ)) % (b : ℤ) ≤ ((b - 1 : ℕ) : ℤ) := by
+    have hlt : (a * (k : ℤ)) % (b : ℤ) < (b : ℤ) :=
+      Int.emod_lt_of_pos _ hbz
+    omega
+  have hleR :
+      (((a * (k : ℤ)) % (b : ℤ) : ℤ) : ℝ) ≤ ((b - 1 : ℕ) : ℝ) := by
+    exact_mod_cast hleZ
+  exact div_le_div_of_nonneg_right hleR (by positivity)
+
+/-- The denominator index has fractional part `0`. This is the concrete
+earlier fractional part that rules out the `aboveCount = n` endpoint. -/
+private theorem fracMul_rat_den_eq_zero (a : ℤ) {b : ℕ} (hb : 0 < b) :
+    fracMul ((a : ℝ) / (b : ℝ)) b = 0 := by
+  have hmod : a * (b : ℤ) ≡ (0 : ℤ) [ZMOD (b : ℤ)] := by
+    exact Int.modEq_zero_iff_dvd.mpr ⟨a, by ring⟩
+  have hfrac := fracMul_rat_eq_of_modEq
+    (a := a) (b := b) (k := b) (j := 0) (by omega) hmod
+  simpa using hfrac
+
+/-- Since multiplication by `a` permutes residues modulo `b`, the first `n`
+indices contain a representative of every residue once `n ≥ b`. -/
+private theorem exists_Ico_int_mul_modEq_of_coprime {a : ℤ} {b n j : ℕ}
+    (hb : 0 < b) (hab : Nat.Coprime a.natAbs b) (hn : b ≤ n) :
+    ∃ k ∈ Finset.Ico 1 (n + 1),
+      a * (k : ℤ) ≡ (j : ℤ) [ZMOD (b : ℤ)] := by
+  haveI : NeZero b := ⟨Nat.ne_of_gt hb⟩
+  have hcop : IsCoprime a (b : ℤ) := by
+    rw [Int.isCoprime_iff_nat_coprime]
+    exact hab
+  let x : ZMod b := (a : ZMod b)⁻¹ * (j : ZMod b)
+  have hax : (a : ZMod b) * x = (j : ZMod b) := by
+    dsimp [x]
+    rw [← mul_assoc, ZMod.coe_int_mul_inv_eq_one hcop]
+    simp
+  by_cases hx : x = 0
+  · refine ⟨b, ?_, ?_⟩
+    · simp [Finset.mem_Ico]
+      omega
+    · have hjZ : (j : ZMod b) = 0 := by
+        rw [← hax, hx]
+        simp
+      have hz : ((a * (b : ℤ) : ℤ) : ZMod b) = ((j : ℤ) : ZMod b) := by
+        calc
+          ((a * (b : ℤ) : ℤ) : ZMod b) = (a : ZMod b) * (b : ZMod b) := by
+            norm_num
+          _ = 0 := by simp
+          _ = (j : ZMod b) := hjZ.symm
+          _ = ((j : ℤ) : ZMod b) := by norm_num
+      exact (ZMod.intCast_eq_intCast_iff (a * (b : ℤ)) (j : ℤ) b).mp hz
+  · refine ⟨x.val, ?_, ?_⟩
+    · have hxpos : 0 < x.val := (ZMod.val_pos).mpr hx
+      have hxlt : x.val < b := ZMod.val_lt x
+      simp [Finset.mem_Ico]
+      omega
+    · have hz : ((a * (x.val : ℤ) : ℤ) : ZMod b) = ((j : ℤ) : ZMod b) := by
+        calc
+          ((a * (x.val : ℤ) : ℤ) : ZMod b) =
+              (a : ZMod b) * ((x.val : ℕ) : ZMod b) := by
+            norm_num
+          _ = (a : ZMod b) * x := by
+            rw [ZMod.natCast_zmod_val x]
+          _ = (j : ZMod b) := hax
+          _ = ((j : ℤ) : ZMod b) := by norm_num
+      exact (ZMod.intCast_eq_intCast_iff (a * (x.val : ℤ)) (j : ℤ) b).mp hz
+
+/-- For rational `a / b`, the upper endpoint in the pairing alternative is
+impossible once the earlier indices include `b`, whose fractional part is `0`. -/
+private theorem aboveCount_rat_ne_n {a : ℤ} {b n : ℕ}
+    (hb : 0 < b) (hn : b ≤ n) :
+    aboveCount ((a : ℝ) / (b : ℝ)) (n + 1) ≠ n := by
+  intro hC
+  have hfilter_card :
+      (((Finset.Ico 1 (n + 1)).filter fun k =>
+          fracMul ((a : ℝ) / (b : ℝ)) (n + 1) <
+            fracMul ((a : ℝ) / (b : ℝ)) k).card =
+        (Finset.Ico 1 (n + 1)).card) := by
+    rw [show (Finset.Ico 1 (n + 1)).card = n by simp]
+    simpa [aboveCount] using hC
+  have hall := (Finset.card_filter_eq_iff.mp hfilter_card)
+  have hbmem : b ∈ Finset.Ico 1 (n + 1) := by
+    simp [Finset.mem_Ico]
+    omega
+  have hlt := hall b hbmem
+  have hzero := fracMul_rat_den_eq_zero a hb
+  rw [hzero] at hlt
+  have hnonneg : 0 ≤ fracMul ((a : ℝ) / (b : ℝ)) (n + 1) := by
+    unfold fracMul
+    exact Int.fract_nonneg _
+  linarith
+
+/-- If no earlier rational fractional part lies above the endpoint, then the
+endpoint must be the largest residue `(b - 1) / b`. -/
+private theorem fracMul_rat_eq_top_of_aboveCount_zero {a : ℤ} {b n : ℕ}
+    (hb : 0 < b) (hab : Nat.Coprime a.natAbs b) (hn : b ≤ n)
+    (hC : aboveCount ((a : ℝ) / (b : ℝ)) (n + 1) = 0) :
+    fracMul ((a : ℝ) / (b : ℝ)) (n + 1) =
+      ((b - 1 : ℕ) : ℝ) / (b : ℝ) := by
+  have hnone :
+      ∀ k ∈ Finset.Ico 1 (n + 1),
+        ¬ fracMul ((a : ℝ) / (b : ℝ)) (n + 1) <
+            fracMul ((a : ℝ) / (b : ℝ)) k := by
+    simpa [aboveCount] using
+      (Finset.card_filter_eq_zero_iff.mp hC)
+  obtain ⟨k, hk, hmod⟩ :=
+    exists_Ico_int_mul_modEq_of_coprime
+      (a := a) (b := b) (n := n) (j := b - 1) hb hab hn
+  have hkfrac :
+      fracMul ((a : ℝ) / (b : ℝ)) k =
+        ((b - 1 : ℕ) : ℝ) / (b : ℝ) := by
+    exact fracMul_rat_eq_of_modEq
+      (a := a) (b := b) (k := k) (j := b - 1) (by omega) hmod
+  have htop_le :
+      ((b - 1 : ℕ) : ℝ) / (b : ℝ) ≤
+        fracMul ((a : ℝ) / (b : ℝ)) (n + 1) := by
+    rw [← hkfrac]
+    exact le_of_not_gt (hnone k hk)
+  have hle_top :
+      fracMul ((a : ℝ) / (b : ℝ)) (n + 1) ≤
+        ((b - 1 : ℕ) : ℝ) / (b : ℝ) :=
+    fracMul_rat_le_top a hb
+  exact le_antisymm hle_top htop_le
+
+/-- A modulo-`2b` congruence says the fractional part is the largest residue. -/
+private theorem fracMul_rat_eq_top_of_modEq_two_mul {a : ℤ} {b q : ℕ}
+    (hb : 0 < b)
+    (hmod : a * (q : ℤ) ≡ (b : ℤ) - 1 [ZMOD (2 * (b : ℤ))]) :
+    fracMul ((a : ℝ) / (b : ℝ)) q =
+      ((b - 1 : ℕ) : ℝ) / (b : ℝ) := by
+  have hmodb : a * (q : ℤ) ≡ (b : ℤ) - 1 [ZMOD (b : ℤ)] :=
+    Int.ModEq.of_dvd (by exact dvd_mul_left (b : ℤ) (2 : ℤ)) hmod
+  have hpred : ((b - 1 : ℕ) : ℤ) = (b : ℤ) - 1 := by omega
+  exact fracMul_rat_eq_of_modEq
+    (a := a) (b := b) (k := q) (j := b - 1) (by omega) (by
+      simpa [hpred] using hmodb)
+
+/-- A modulo-`2b` congruence makes the rational paired floor even. -/
+private theorem even_floorMul_rat_of_modEq_two_mul {a : ℤ} {b q : ℕ}
+    (hb : 0 < b)
+    (hmod : a * (q : ℤ) ≡ (b : ℤ) - 1 [ZMOD (2 * (b : ℤ))]) :
+    Even (floorMul ((a : ℝ) / (b : ℝ)) q) := by
+  rw [floorMul_rat_eq_ediv]
+  let T : ℤ := a * (q : ℤ)
+  let B : ℤ := b
+  change Even (T / B)
+  have hmodT : T ≡ B - 1 [ZMOD 2 * B] := by
+    simpa [T, B] using hmod
+  obtain ⟨s, hs⟩ := Int.modEq_iff_add_fac.mp hmodT
+  have hBpos : 0 < B := by
+    dsimp [B]
+    exact_mod_cast hb
+  have hrem_nonneg : 0 ≤ B - 1 := by omega
+  have hrem_lt : B - 1 < B := by omega
+  have hdecomp : (B - 1) + B * (-2 * s) = T := by
+    rw [hs]
+    ring
+  have hquot : T / B = -2 * s :=
+    ((Int.ediv_emod_unique hBpos).mpr ⟨hdecomp, hrem_nonneg, hrem_lt⟩).1
+  rw [hquot]
+  exact ⟨-s, by ring⟩
+
+/-- If the endpoint is the largest residue, no earlier fractional part lies
+strictly above it. -/
+private theorem aboveCount_rat_eq_zero_of_modEq_two_mul {a : ℤ} {b q : ℕ}
+    (hb : 0 < b)
+    (hmod : a * (q : ℤ) ≡ (b : ℤ) - 1 [ZMOD (2 * (b : ℤ))]) :
+    aboveCount ((a : ℝ) / (b : ℝ)) q = 0 := by
+  have htop := fracMul_rat_eq_top_of_modEq_two_mul
+    (a := a) (b := b) (q := q) hb hmod
+  rw [aboveCount]
+  apply Finset.card_filter_eq_zero_iff.mpr
+  intro k hk
+  rw [htop]
+  exact not_lt_of_ge (fracMul_rat_le_top a hb)
+
+/-- Largest residue plus even rational paired floor reconstructs the full
+congruence modulo `2b`. -/
+private theorem modEq_two_mul_of_fracMul_top_and_even_floor {a : ℤ} {b q : ℕ}
+    (hb : 0 < b)
+    (hfrac : fracMul ((a : ℝ) / (b : ℝ)) q =
+      ((b - 1 : ℕ) : ℝ) / (b : ℝ))
+    (heven : Even (floorMul ((a : ℝ) / (b : ℝ)) q)) :
+    a * (q : ℤ) ≡ (b : ℤ) - 1 [ZMOD (2 * (b : ℤ))] := by
+  let T : ℤ := a * (q : ℤ)
+  let B : ℤ := b
+  have hBpos : 0 < B := by
+    dsimp [B]
+    exact_mod_cast hb
+  have hBneR : (b : ℝ) ≠ 0 := by positivity
+  have hfrac' :
+      (((T % B : ℤ) : ℝ) / (b : ℝ)) =
+        ((b - 1 : ℕ) : ℝ) / (b : ℝ) := by
+    simpa [T, B, fracMul_rat_eq_int_emod] using hfrac
+  have hremNat : T % B = ((b - 1 : ℕ) : ℤ) := by
+    have hnumR :
+        (((T % B : ℤ) : ℝ)) = ((b - 1 : ℕ) : ℝ) :=
+      (div_left_inj' hBneR).mp hfrac'
+    exact_mod_cast hnumR
+  have hpred : ((b - 1 : ℕ) : ℤ) = B - 1 := by
+    dsimp [B]
+    omega
+  have hrem : T % B = B - 1 := by
+    simpa [hpred] using hremNat
+  have heven' : Even (T / B) := by
+    simpa [T, B, floorMul_rat_eq_ediv] using heven
+  rw [even_iff_two_dvd] at heven'
+  rcases heven' with ⟨s, hquot⟩
+  have hT : T = (B - 1) + (2 * B) * s := by
+    calc
+      T = B * (T / B) + T % B := by rw [Int.mul_ediv_add_emod]
+      _ = B * (2 * s) + (B - 1) := by rw [hquot, hrem]
+      _ = (B - 1) + (2 * B) * s := by ring
+  have hmodeqT : T ≡ B - 1 [ZMOD 2 * B] := by
+    rw [Int.modEq_iff_add_fac]
+    refine ⟨-s, ?_⟩
+    rw [hT]
+    ring
+  simpa [T, B] using hmodeqT
+
+/-- Explicit rational-tail membership criterion. This is the main local target
+for the rational direction. -/
+theorem mem_A_rat_iff_modEq {a : ℤ} {b n : ℕ}
+    (hb : 0 < b) (hab : Nat.Coprime a.natAbs b) (hn : b ≤ n) :
+    n ∈ A ((a : ℝ) / (b : ℝ)) ↔
+      a * (n + 1 : ℕ) ≡ (b : ℤ) - 1 [ZMOD (2 * (b : ℤ))] := by
+  constructor
+  · intro hA
+    have hnpos : 0 < n := lt_of_lt_of_le hb hn
+    have hCalt := aboveCount_eq_zero_or_eq_of_mem_A
+      (r := ((a : ℝ) / (b : ℝ))) hnpos hA
+    have hC : aboveCount ((a : ℝ) / (b : ℝ)) (n + 1) = 0 := by
+      rcases hCalt with hzero | htop
+      · exact hzero
+      · exact False.elim (aboveCount_rat_ne_n (a := a) (b := b) hb hn htop)
+    have hfrac := fracMul_rat_eq_top_of_aboveCount_zero
+      (a := a) (b := b) (n := n) hb hab hn hC
+    have heven := even_floorMul_of_mem_A_and_aboveCount_zero
+      (r := ((a : ℝ) / (b : ℝ))) hnpos hA hC
+    exact modEq_two_mul_of_fracMul_top_and_even_floor
+      (a := a) (b := b) (q := n + 1) hb hfrac heven
+  · intro hmod
+    have hnpos : 0 < n := lt_of_lt_of_le hb hn
+    have hC := aboveCount_rat_eq_zero_of_modEq_two_mul
+      (a := a) (b := b) (q := n + 1) hb hmod
+    have heven := even_floorMul_rat_of_modEq_two_mul
+      (a := a) (b := b) (q := n + 1) hb hmod
+    exact mem_A_of_aboveCount_zero_and_even_floor hnpos hC heven
+
+/-- Odd numerator case of the rational tail congruence: `a` is invertible
+modulo `2b`, so the congruence is one residue class modulo `2b`. -/
+private theorem rat_modEq_single_residue_odd {a : ℤ} {b : ℕ}
+    (hb : 0 < b) (hab : Nat.Coprime a.natAbs b) (haodd : Odd a.natAbs) :
+    ∃ c d : ℕ, 0 < d ∧ ∀ n : ℕ,
+      (a * (n + 1 : ℕ) ≡ (b : ℤ) - 1 [ZMOD (2 * (b : ℤ))] ↔
+        n % d = c % d) := by
+  let m : ℕ := 2 * b
+  have hmpos : 0 < m := by
+    dsimp [m]
+    omega
+  haveI : NeZero m := ⟨Nat.ne_of_gt hmpos⟩
+  have hcop : IsCoprime a (m : ℤ) := by
+    dsimp [m]
+    rw [Int.isCoprime_iff_nat_coprime]
+    change Nat.Coprime a.natAbs (2 * b)
+    rw [Nat.coprime_mul_iff_right]
+    exact ⟨by simpa using haodd.coprime_two_right, hab⟩
+  let x : ZMod m := (a : ZMod m)⁻¹ * ((b : ℤ) - 1)
+  refine ⟨(x - 1).val, m, hmpos, ?_⟩
+  intro n
+  constructor
+  · intro h
+    have hZ :
+        ((a * (n + 1 : ℕ) : ℤ) : ZMod m) =
+          (((b : ℤ) - 1 : ℤ) : ZMod m) := by
+      rw [ZMod.intCast_eq_intCast_iff]
+      simpa [m] using h
+    have hnp1 : ((n + 1 : ℕ) : ZMod m) = x := by
+      calc
+        ((n + 1 : ℕ) : ZMod m) =
+            ((a : ZMod m)⁻¹ * (a : ZMod m)) * ((n + 1 : ℕ) : ZMod m) := by
+          rw [ZMod.coe_int_inv_mul_eq_one hcop]
+          simp
+        _ = (a : ZMod m)⁻¹ * ((a * (n + 1 : ℕ) : ℤ) : ZMod m) := by
+          norm_num [mul_assoc]
+        _ = x := by
+          rw [hZ]
+          simp [x]
+    have hnZ : (n : ZMod m) = x - 1 := by
+      have := congrArg (fun y : ZMod m => y - 1) hnp1
+      simpa [Nat.cast_add, sub_eq_add_neg, add_assoc, add_comm, add_left_comm] using this
+    have hnZval : (n : ZMod m) = ((x - 1).val : ZMod m) := by
+      rw [hnZ]
+      exact (ZMod.natCast_zmod_val (x - 1)).symm
+    exact (ZMod.natCast_eq_natCast_iff' n (x - 1).val m).mp hnZval
+  · intro hnmod
+    have hnZval : (n : ZMod m) = ((x - 1).val : ZMod m) :=
+      (ZMod.natCast_eq_natCast_iff' n (x - 1).val m).mpr hnmod
+    have hnZ : (n : ZMod m) = x - 1 := by
+      simpa using hnZval.trans (ZMod.natCast_zmod_val (x - 1))
+    have hnp1 : ((n + 1 : ℕ) : ZMod m) = x := by
+      calc
+        ((n + 1 : ℕ) : ZMod m) = (n : ZMod m) + 1 := by
+          norm_num
+        _ = x := by
+          rw [hnZ]
+          simp [sub_eq_add_neg, add_assoc]
+    have hZ :
+        ((a * (n + 1 : ℕ) : ℤ) : ZMod m) =
+          (((b : ℤ) - 1 : ℤ) : ZMod m) := by
+      calc
+        ((a * (n + 1 : ℕ) : ℤ) : ZMod m) =
+            (a : ZMod m) * ((n + 1 : ℕ) : ZMod m) := by
+          norm_num
+        _ = (a : ZMod m) * x := by
+          rw [hnp1]
+        _ = (((b : ℤ) - 1 : ℤ) : ZMod m) := by
+          dsimp [x]
+          rw [← mul_assoc, ZMod.coe_int_mul_inv_eq_one hcop]
+          simp
+    rw [ZMod.intCast_eq_intCast_iff] at hZ
+    simpa [m] using hZ
+
+/-- Even numerator case of the rational tail congruence: coprimality forces
+`b` odd, so the congruence can be divided by `2` and solved modulo `b`. -/
+private theorem rat_modEq_single_residue_even {a : ℤ} {b : ℕ}
+    (hb : 0 < b) (hab : Nat.Coprime a.natAbs b) (haeven : Even a) :
+    ∃ c d : ℕ, 0 < d ∧ ∀ n : ℕ,
+      (a * (n + 1 : ℕ) ≡ (b : ℤ) - 1 [ZMOD (2 * (b : ℤ))] ↔
+        n % d = c % d) := by
+  let a₂ : ℤ := a / 2
+  let y : ℤ := ((b : ℤ) - 1) / 2
+  let m : ℕ := b
+  have hmpos : 0 < m := by
+    simpa [m] using hb
+  haveI : NeZero m := ⟨Nat.ne_of_gt hmpos⟩
+  have hbodd : Odd b := by
+    have h2a : 2 ∣ a.natAbs := by
+      rw [← Int.ofNat_dvd_left]
+      simpa [even_iff_two_dvd] using haeven
+    have hcop2b : Nat.Coprime 2 b := Nat.Coprime.of_dvd_left h2a hab
+    simpa using hcop2b
+  have hcop : IsCoprime a₂ (m : ℤ) := by
+    dsimp [a₂, m]
+    rw [Int.isCoprime_iff_nat_coprime]
+    change Nat.Coprime (a / 2).natAbs b
+    exact Nat.Coprime.of_dvd_left (by
+      rw [Int.natAbs_dvd_natAbs]
+      refine ⟨2, ?_⟩
+      simpa [mul_comm] using (Int.ediv_two_mul_two_of_even haeven).symm) hab
+  have ha_eq : a = 2 * a₂ := by
+    dsimp [a₂]
+    simpa using (Int.two_mul_ediv_two_of_even haeven).symm
+  have hy_eq : (b : ℤ) - 1 = 2 * y := by
+    dsimp [y]
+    exact (Int.two_mul_ediv_two_of_even (by
+      rw [Int.even_sub_one]
+      rw [Int.even_coe_nat]
+      exact Nat.not_even_iff_odd.mpr hbodd)).symm
+  let x : ZMod m := (a₂ : ZMod m)⁻¹ * y
+  refine ⟨(x - 1).val, m, hmpos, ?_⟩
+  intro n
+  have hhalf_iff :
+      (a * (n + 1 : ℕ) ≡ (b : ℤ) - 1 [ZMOD (2 * (b : ℤ))] ↔
+        a₂ * (n + 1 : ℕ) ≡ y [ZMOD (m : ℤ)]) := by
+    calc
+      a * (n + 1 : ℕ) ≡ (b : ℤ) - 1 [ZMOD (2 * (b : ℤ))]
+          ↔ 2 * (a₂ * (n + 1 : ℕ)) ≡ 2 * y [ZMOD 2 * (m : ℤ)] := by
+        subst m
+        rw [ha_eq, hy_eq]
+        ring_nf
+      _ ↔ a₂ * (n + 1 : ℕ) ≡ y [ZMOD (m : ℤ)] :=
+        Int.ModEq.mul_left_cancel_iff' (by norm_num : (2 : ℤ) ≠ 0)
+  rw [hhalf_iff]
+  constructor
+  · intro h
+    have hZ : ((a₂ * (n + 1 : ℕ) : ℤ) : ZMod m) = (y : ZMod m) := by
+      rw [ZMod.intCast_eq_intCast_iff]
+      simp at h ⊢
+      exact h
+    have hnp1 : ((n + 1 : ℕ) : ZMod m) = x := by
+      calc
+        ((n + 1 : ℕ) : ZMod m) =
+            ((a₂ : ZMod m)⁻¹ * (a₂ : ZMod m)) * ((n + 1 : ℕ) : ZMod m) := by
+          simp [ZMod.coe_int_inv_mul_eq_one hcop]
+        _ = (a₂ : ZMod m)⁻¹ * ((a₂ * (n + 1 : ℕ) : ℤ) : ZMod m) := by
+          norm_num [mul_assoc]
+        _ = x := by
+          rw [hZ]
+    have hnZ : (n : ZMod m) = x - 1 := by
+      have := congrArg (fun z : ZMod m => z - 1) hnp1
+      simpa [Nat.cast_add, sub_eq_add_neg, add_assoc, add_comm, add_left_comm] using this
+    have hnZval : (n : ZMod m) = ((x - 1).val : ZMod m) := by
+      rw [hnZ]
+      exact (ZMod.natCast_zmod_val (x - 1)).symm
+    exact (ZMod.natCast_eq_natCast_iff' n (x - 1).val m).mp hnZval
+  · intro hnmod
+    have hnZval : (n : ZMod m) = ((x - 1).val : ZMod m) :=
+      (ZMod.natCast_eq_natCast_iff' n (x - 1).val m).mpr hnmod
+    have hnZ : (n : ZMod m) = x - 1 := by
+      simpa using hnZval.trans (ZMod.natCast_zmod_val (x - 1))
+    have hnp1 : ((n + 1 : ℕ) : ZMod m) = x := by
+      calc
+        ((n + 1 : ℕ) : ZMod m) = (n : ZMod m) + 1 := by
+          norm_num
+        _ = x := by
+          rw [hnZ]
+          simp [sub_eq_add_neg, add_assoc]
+    have hZ : ((a₂ * (n + 1 : ℕ) : ℤ) : ZMod m) = (y : ZMod m) := by
+      calc
+        ((a₂ * (n + 1 : ℕ) : ℤ) : ZMod m) =
+            (a₂ : ZMod m) * ((n + 1 : ℕ) : ZMod m) := by
+          norm_num
+        _ = (a₂ : ZMod m) * x := by
+          rw [hnp1]
+        _ = (y : ZMod m) := by
+          dsimp [x]
+          rw [← mul_assoc, ZMod.coe_int_mul_inv_eq_one hcop]
+          simp
+    rw [ZMod.intCast_eq_intCast_iff] at hZ
+    simpa using hZ
+
+/-- A reduced linear congruence from the rational tail is one natural-number
+residue class. Keeping this separate isolates the modular-arithmetic work from
+the floor-sum work. -/
+theorem rat_modEq_is_single_residue_class {a : ℤ} {b : ℕ}
+    (hb : 0 < b) (hab : Nat.Coprime a.natAbs b) :
+    ∃ c d : ℕ, 0 < d ∧ ∀ n : ℕ,
+      (a * (n + 1 : ℕ) ≡ (b : ℤ) - 1 [ZMOD (2 * (b : ℤ))] ↔
+        n % d = c % d) := by
+  by_cases haeven : Even a
+  · exact rat_modEq_single_residue_even hb hab haeven
+  · exact rat_modEq_single_residue_odd hb hab (by
+      exact Nat.not_even_iff_odd.mp ((not_congr (by
+        rw [even_iff_two_dvd, even_iff_two_dvd]
+        exact Int.ofNat_dvd_left.symm)).mpr haeven))
+
+/-- Main rational-case theorem: for rational `r`, `A_r` is eventually a single
+arithmetic progression. -/
+theorem rational_eventuallyAP {r : ℝ} (hr : IsRational r) :
+    IsEventuallyAP (A r) := by
+  rcases hr with ⟨q, hq⟩
+  subst r
+  rcases rat_modEq_is_single_residue_class
+      (a := q.num) (b := q.den) q.den_pos q.reduced with
+    ⟨c, d, hd, hresidue⟩
+  refine ⟨c, d, q.den, hd, ?_⟩
+  intro n hn
+  have htail := mem_A_rat_iff_modEq
+    (a := q.num) (b := q.den) (n := n) q.den_pos q.reduced hn
+  have hcast : A (q : ℝ) = A ((q.num : ℝ) / (q.den : ℝ)) := by
+    ext m
+    simp [Rat.cast_def]
+  rw [hcast]
+  exact htail.trans (hresidue n)
+
+end IrrationalityAr
+-- END: RationalCase.lean
+
+-- BEGIN: IrrationalCase.lean
+
+namespace IrrationalityAr
+
+/-!
+# Irrational case
+
+The first theorem is the elementary bridge. It follows from the shared pairing
+identity and the fact that the fractional parts of positive multiples of an
+irrational real are distinct.
+-/
+
+/-- Distinct positive-index multiples of an irrational real have distinct
+fractional parts. -/
+private theorem fracMul_ne_of_irrational {r : ℝ} (hr : IsIrrational r)
+    {k q : ℕ} (hkq : k < q) :
+    fracMul r q ≠ fracMul r k := by
+  intro h
+  unfold fracMul at h
+  rcases (Int.fract_eq_fract.mp h) with ⟨z, hz⟩
+  let d : ℕ := q - k
+  have hdpos : 0 < d := by
+    dsimp [d]
+    omega
+  have hmul : (d : ℝ) * r = (z : ℝ) := by
+    dsimp [d]
+    rw [Nat.cast_sub hkq.le]
+    calc
+      ((q : ℝ) - (k : ℝ)) * r = (q : ℝ) * r - (k : ℝ) * r := by ring
+      _ = (z : ℝ) := hz
+  apply hr
+  refine ⟨(z : ℚ) / (d : ℚ), ?_⟩
+  have hdR : (d : ℝ) ≠ 0 := by exact_mod_cast Nat.ne_of_gt hdpos
+  have hcast :
+      (((z : ℚ) / (d : ℚ) : ℚ) : ℝ) = (z : ℝ) / (d : ℝ) := by
+    norm_num
+  rw [hcast]
+  have : r = (z : ℝ) / (d : ℝ) := by
+    rw [eq_div_iff hdR]
+    rw [← hmul]
+    ring
+  exact this.symm
+
+/-- Project-local irrationality agrees with mathlib's `Irrational` predicate. -/
+private theorem irrational_of_isIrrational {r : ℝ} (hr : IsIrrational r) :
+    Irrational r := by
+  rintro ⟨q, hq⟩
+  exact hr ⟨q, hq⟩
+
+/-- For irrational `r`, the lower endpoint `aboveCount = 0` says the new point
+is a strict upper record. -/
+private theorem aboveCount_zero_iff_upperRecord {r : ℝ} (hr : IsIrrational r)
+    {n : ℕ} :
+    aboveCount r (n + 1) = 0 ↔ IsUpperRecord r (n + 1) := by
+  constructor
+  · intro hC
+    refine ⟨by omega, ?_⟩
+    intro k hkpos hklt
+    have hnone :
+        ∀ k ∈ Finset.Ico 1 (n + 1),
+          ¬ fracMul r (n + 1) < fracMul r k := by
+      simpa [aboveCount] using
+        (Finset.card_filter_eq_zero_iff.mp hC)
+    have hkmem : k ∈ Finset.Ico 1 (n + 1) := by
+      simp [Finset.mem_Ico]
+      omega
+    have hle : fracMul r k ≤ fracMul r (n + 1) :=
+      le_of_not_gt (hnone k hkmem)
+    have hne : fracMul r k ≠ fracMul r (n + 1) :=
+      (fracMul_ne_of_irrational hr hklt).symm
+    exact lt_of_le_of_ne hle hne
+  · rintro ⟨_, hupper⟩
+    rw [aboveCount]
+    apply Finset.card_filter_eq_zero_iff.mpr
+    intro k hk
+    rcases Finset.mem_Ico.mp hk with ⟨hkpos, hklt⟩
+    exact not_lt_of_gt (hupper k hkpos hklt)
+
+/-- The upper endpoint of the count is exactly the strict lower-record
+condition. -/
+private theorem aboveCount_eq_n_iff_lowerRecord {r : ℝ} {n : ℕ} :
+    aboveCount r (n + 1) = n ↔ IsLowerRecord r (n + 1) := by
+  constructor
+  · intro hC
+    refine ⟨by omega, ?_⟩
+    have hfilter_card :
+        (((Finset.Ico 1 (n + 1)).filter fun k =>
+            fracMul r (n + 1) < fracMul r k).card =
+          (Finset.Ico 1 (n + 1)).card) := by
+      rw [show (Finset.Ico 1 (n + 1)).card = n by simp]
+      simpa [aboveCount] using hC
+    have hall := Finset.card_filter_eq_iff.mp hfilter_card
+    intro k hkpos hklt
+    exact hall k (by
+      simp [Finset.mem_Ico]
+      omega)
+  · rintro ⟨_, hlower⟩
+    have hall :
+        ∀ k ∈ Finset.Ico 1 (n + 1),
+          fracMul r (n + 1) < fracMul r k := by
+      intro k hk
+      rcases Finset.mem_Ico.mp hk with ⟨hkpos, hklt⟩
+      exact hlower k hkpos hklt
+    have hcard := Finset.card_filter_eq_iff.mpr hall
+    simpa [aboveCount] using hcard
+
+/-- Pairing identity: lower record plus odd paired floor implies membership. -/
+private theorem mem_A_of_aboveCount_eq_n_and_odd_floor {r : ℝ} {n : ℕ}
+    (hn : 0 < n) (hC : aboveCount r (n + 1) = n)
+    (hodd : Odd (floorMul r (n + 1))) :
+    n ∈ A r := by
+  rcases hodd with ⟨z, hz⟩
+  have hpair :
+      2 * floorSum r n =
+        (n : ℤ) * floorMul r (n + 1) - (aboveCount r (n + 1) : ℤ) := by
+    simpa using two_mul_floorSum_pred_eq r (n + 1)
+  have hpairn :
+      2 * floorSum r n = (n : ℤ) * floorMul r (n + 1) - (n : ℤ) := by
+    simpa [hC] using hpair
+  refine (mem_A_iff).mpr ⟨hn, ?_⟩
+  refine ⟨z, ?_⟩
+  apply mul_left_cancel₀ (show (2 : ℤ) ≠ 0 by norm_num)
+  calc
+    2 * floorSum r n = (n : ℤ) * floorMul r (n + 1) - (n : ℤ) := hpairn
+    _ = (n : ℤ) * (2 * z + 1) - (n : ℤ) := by rw [hz]
+    _ = 2 * ((n : ℤ) * z) := by ring
+
+/-- If membership chooses the lower endpoint, the paired floor is odd. -/
+private theorem odd_floorMul_of_mem_A_and_aboveCount_eq_n {r : ℝ} {n : ℕ}
+    (hn : 0 < n) (hA : n ∈ A r)
+    (hC : aboveCount r (n + 1) = n) :
+    Odd (floorMul r (n + 1)) := by
+  rcases (mem_A_iff.mp hA).2 with ⟨z, hz⟩
+  have hpair :
+      2 * floorSum r n =
+        (n : ℤ) * floorMul r (n + 1) - (aboveCount r (n + 1) : ℤ) := by
+    simpa using two_mul_floorSum_pred_eq r (n + 1)
+  have hpairn :
+      2 * floorSum r n = (n : ℤ) * floorMul r (n + 1) - (n : ℤ) := by
+    simpa [hC] using hpair
+  have hnz : (n : ℤ) ≠ 0 := by exact_mod_cast (Nat.ne_of_gt hn)
+  have hfloor : floorMul r (n + 1) = 2 * z + 1 := by
+    apply mul_left_cancel₀ hnz
+    calc
+      (n : ℤ) * floorMul r (n + 1) =
+          (n : ℤ) * floorMul r (n + 1) - (n : ℤ) + (n : ℤ) := by ring
+      _ = 2 * floorSum r n + (n : ℤ) := by rw [← hpairn]
+      _ = 2 * ((n : ℤ) * z) + (n : ℤ) := by rw [hz]
+      _ = (n : ℤ) * (2 * z + 1) := by ring
+  exact ⟨z, hfloor⟩
+
+/-- For irrational `r`, membership of `n` in `A_r` is equivalent to `n + 1`
+being a record fractional-part extremum with the required parity. -/
+theorem mem_A_iff_record_extreme {r : ℝ} (hr : IsIrrational r)
+    {n : ℕ} (hn : 0 < n) :
+    n ∈ A r ↔
+      (IsLowerRecord r (n + 1) ∧ Odd (floorMul r (n + 1))) ∨
+      (IsUpperRecord r (n + 1) ∧ Even (floorMul r (n + 1))) := by
+  constructor
+  · intro hA
+    have hCalt := aboveCount_eq_zero_or_eq_of_mem_A hn hA
+    rcases hCalt with hzero | htop
+    · right
+      exact ⟨(aboveCount_zero_iff_upperRecord hr).mp hzero,
+        even_floorMul_of_mem_A_and_aboveCount_zero hn hA hzero⟩
+    · left
+      exact ⟨aboveCount_eq_n_iff_lowerRecord.mp htop,
+        odd_floorMul_of_mem_A_and_aboveCount_eq_n hn hA htop⟩
+  · rintro (⟨hlower, hodd⟩ | ⟨hupper, heven⟩)
+    · exact mem_A_of_aboveCount_eq_n_and_odd_floor hn
+        (aboveCount_eq_n_iff_lowerRecord.mpr hlower) hodd
+    · exact mem_A_of_aboveCount_zero_and_even_floor hn
+        ((aboveCount_zero_iff_upperRecord hr).mpr hupper) heven
+
+/-!
+To rule out an infinite arithmetic progression, suppose `a + k d ∈ A_r` for
+all `k`. Then the fractional parts at indices `a + k d + 1` are all new record
+minima or maxima. Starting from the first two distinct values, all later values
+must avoid the nonempty open interval between them.
+
+On the other hand, the orbit is a translate of the rotation by `d r`. Since
+`d r` is irrational, its orbit is dense modulo one. This gives a contradiction.
+
+Mathlib contains the circle-level density theorem
+`AddCircle.denseRange_zsmul_coe_iff`. The project-local bridge below translates
+it to the required natural-index arithmetic progression.
+-/
+
+/-- Project-local density bridge for a translated natural orbit modulo one.
+
+The target is the additive circle, not `ℝ`: fractional parts live in `[0, 1)`,
+so they cannot be dense in all of `ℝ`. -/
+theorem denseRange_translated_nat_toAddCircle {r : ℝ} (hr : IsIrrational r)
+    {d : ℕ} (hd : 0 < d) (q₀ : ℕ) :
+    DenseRange (fun k : ℕ =>
+      (((((q₀ + k * d : ℕ) : ℝ) * r : ℝ) : AddCircle (1 : ℝ)))) := by
+  let a : ℝ := (d : ℝ) * r
+  let t : AddCircle (1 : ℝ) := (((q₀ : ℝ) * r : ℝ) : AddCircle (1 : ℝ))
+  have hirr : Irrational r := irrational_of_isIrrational hr
+  have hairr : Irrational (a / (1 : ℝ)) := by
+    dsimp [a]
+    simpa using (Irrational.natCast_mul hirr (Nat.ne_of_gt hd))
+  have hdenseZ : DenseRange (fun k : ℤ =>
+      k • ((a : ℝ) : AddCircle (1 : ℝ))) := by
+    exact (AddCircle.denseRange_zsmul_coe_iff
+      (a := a) (p := (1 : ℝ))).mpr hairr
+  have hdenseN : DenseRange (fun k : ℕ =>
+      k • ((a : ℝ) : AddCircle (1 : ℝ))) := by
+    exact denseRange_zsmul_iff_nsmul.mp hdenseZ
+  have htrans : DenseRange
+      ((Homeomorph.addLeft t) ∘ fun k : ℕ =>
+        k • ((a : ℝ) : AddCircle (1 : ℝ))) := by
+    exact DenseRange.comp
+      (Function.Surjective.denseRange (Homeomorph.addLeft t).surjective)
+      hdenseN (Homeomorph.addLeft t).continuous
+  simpa [Function.comp, a, t, nsmul_eq_mul, Nat.cast_add, Nat.cast_mul,
+    AddCircle.coe_add, mul_add, add_mul, mul_assoc] using htrans
+
+/-- Fractional parts are represented in the standard half-open interval. -/
+private theorem fracMul_mem_Ico (r : ℝ) (q : ℕ) :
+    fracMul r q ∈ Set.Ico (0 : ℝ) 1 := by
+  unfold fracMul
+  exact ⟨Int.fract_nonneg _, Int.fract_lt_one _⟩
+
+/-- The additive-circle point represented by `q * r` is represented by its
+fractional part. -/
+private theorem coe_fracMul_eq (r : ℝ) (q : ℕ) :
+    ((fracMul r q : ℝ) : AddCircle (1 : ℝ)) =
+      (((q : ℝ) * r : ℝ) : AddCircle (1 : ℝ)) := by
+  unfold fracMul
+  exact AddCircle.coe_fract _
+
+/-- If a translated natural orbit is dense on `AddCircle 1`, then it hits every
+nonempty real interval inside the standard fractional-part fundamental domain. -/
+private theorem exists_fracMul_mem_Ioo_of_dense_toAddCircle
+    {r : ℝ} {q₀ d : ℕ} {u v : ℝ}
+    (hdense : DenseRange (fun k : ℕ =>
+      (((((q₀ + k * d : ℕ) : ℝ) * r : ℝ) : AddCircle (1 : ℝ)))))
+    (hu : 0 ≤ u) (huv : u < v) (hv : v < 1) :
+    ∃ k : ℕ, fracMul r (q₀ + k * d) ∈ Set.Ioo u v := by
+  let U : Set (AddCircle (1 : ℝ)) :=
+    ((↑) : ℝ → AddCircle (1 : ℝ)) '' Set.Ioo u v
+  have hUopen : IsOpen U := by
+    dsimp [U]
+    exact QuotientAddGroup.isOpenMap_coe (Set.Ioo u v) isOpen_Ioo
+  have hUne : U.Nonempty := by
+    rcases (Set.nonempty_Ioo.mpr huv) with ⟨y, hy⟩
+    exact ⟨(y : AddCircle (1 : ℝ)), ⟨y, hy, rfl⟩⟩
+  rcases hdense.exists_mem_open hUopen hUne with ⟨k, hkU⟩
+  rcases hkU with ⟨y, hyIoo, hycircle⟩
+  refine ⟨k, ?_⟩
+  let q : ℕ := q₀ + k * d
+  have hyIco : y ∈ Set.Ico (0 : ℝ) 1 := by
+    exact ⟨le_trans hu hyIoo.1.le, lt_trans hyIoo.2 hv⟩
+  have hfIco : fracMul r q ∈ Set.Ico (0 : ℝ) 1 :=
+    fracMul_mem_Ico r q
+  have hycircle' :
+      (y : AddCircle (1 : ℝ)) = (fracMul r q : AddCircle (1 : ℝ)) := by
+    dsimp [q] at hycircle ⊢
+    exact hycircle.trans (coe_fracMul_eq r (q₀ + k * d)).symm
+  have hy_eq_frac : y = fracMul r q := by
+    have hyIco' : y ∈ Set.Ico (0 : ℝ) (0 + 1) := by simpa using hyIco
+    have hfIco' : fracMul r q ∈ Set.Ico (0 : ℝ) (0 + 1) := by
+      simpa using hfIco
+    exact (AddCircle.coe_eq_coe_iff_of_mem_Ico
+      (p := (1 : ℝ)) (a := (0 : ℝ)) hyIco' hfIco').mp hycircle'
+  simpa [q, hy_eq_frac] using hyIoo
+
+/-- In an arithmetic progression contained in `A_r`, the first term is
+positive. This is the write-up's harmless `a ≥ 1` reduction. -/
+private theorem ap_start_pos {r : ℝ} {a d : ℕ}
+    (hAP : ∀ k : ℕ, a + k * d ∈ A r) :
+    0 < a := by
+  have hA0 : a ∈ A r := by
+    simpa using hAP 0
+  exact (mem_A_iff.mp hA0).1
+
+/-- The write-up's shifted AP indices `q_k = a + k d + 1` are all lower or
+upper records. -/
+private theorem records_of_ap_mem_A {r : ℝ} (hr : IsIrrational r)
+    {a d : ℕ} (ha : 0 < a)
+    (hAP : ∀ k : ℕ, a + k * d ∈ A r) :
+    ∀ k : ℕ,
+      IsLowerRecord r (a + k * d + 1) ∨
+      IsUpperRecord r (a + k * d + 1) := by
+  intro k
+  have hnpos : 0 < a + k * d := by omega
+  have hiff :=
+    (mem_A_iff_record_extreme (r := r) hr (n := a + k * d) hnpos).mp
+      (hAP k)
+  rcases hiff with hlow | hup
+  · exact Or.inl (by simpa [Nat.add_assoc] using hlow.1)
+  · exact Or.inr (by simpa [Nat.add_assoc] using hup.1)
+
+/-- The first two fractional parts in the shifted AP are distinct. -/
+private theorem ap_first_two_fracMul_ne {r : ℝ} (hr : IsIrrational r)
+    {a d : ℕ} (hd : 0 < d) :
+    fracMul r (a + 1) ≠ fracMul r (a + d + 1) := by
+  have hlt : a + 1 < a + d + 1 := by omega
+  exact (fracMul_ne_of_irrational hr hlt).symm
+
+/-- The open interval between the first two shifted fractional parts is a
+nonempty interval inside the standard fractional-part domain `[0,1)`. -/
+private theorem ap_first_interval_bounds {r : ℝ} (hr : IsIrrational r)
+    {a d : ℕ} (hd : 0 < d) :
+    0 ≤ min (fracMul r (a + 1)) (fracMul r (a + d + 1)) ∧
+      min (fracMul r (a + 1)) (fracMul r (a + d + 1)) <
+        max (fracMul r (a + 1)) (fracMul r (a + d + 1)) ∧
+      max (fracMul r (a + 1)) (fracMul r (a + d + 1)) < 1 := by
+  have hne := ap_first_two_fracMul_ne (r := r) hr (a := a) hd
+  have hnonneg0 : 0 ≤ fracMul r (a + 1) := (fracMul_mem_Ico r (a + 1)).1
+  have hnonneg1 : 0 ≤ fracMul r (a + d + 1) :=
+    (fracMul_mem_Ico r (a + d + 1)).1
+  have hlt_one0 : fracMul r (a + 1) < 1 := (fracMul_mem_Ico r (a + 1)).2
+  have hlt_one1 : fracMul r (a + d + 1) < 1 :=
+    (fracMul_mem_Ico r (a + d + 1)).2
+  refine ⟨le_min hnonneg0 hnonneg1, ?_, max_lt hlt_one0 hlt_one1⟩
+  rcases lt_or_gt_of_ne hne with hlt | hgt
+  · simpa [min_eq_left hlt.le, max_eq_right hlt.le] using hlt
+  · simpa [min_eq_right hgt.le, max_eq_left hgt.le] using hgt
+
+/-- Every later shifted AP record avoids the open interval between the first
+two shifted fractional parts. -/
+private theorem later_records_avoid_first_interval {r : ℝ} {a d : ℕ}
+    (hd : 0 < d)
+    (hrecords : ∀ k : ℕ,
+      IsLowerRecord r (a + k * d + 1) ∨
+      IsUpperRecord r (a + k * d + 1)) :
+    ∀ k : ℕ, 2 ≤ k →
+      fracMul r (a + k * d + 1) ∉
+        Set.Ioo
+          (min (fracMul r (a + 1)) (fracMul r (a + d + 1)))
+          (max (fracMul r (a + 1)) (fracMul r (a + d + 1))) := by
+  intro k hk2 hIoo
+  have hq0_lt : a + 1 < a + k * d + 1 := by
+    have hkpos : 0 < k := by omega
+    have hkdpos : 0 < k * d := Nat.mul_pos hkpos hd
+    omega
+  have hq1_lt : a + d + 1 < a + k * d + 1 := by
+    have hk1 : 1 < k := by omega
+    have hmul : 1 * d < k * d := Nat.mul_lt_mul_of_pos_right hk1 hd
+    omega
+  rcases hrecords k with hlower | hupper
+  · have hlt0 : fracMul r (a + k * d + 1) < fracMul r (a + 1) :=
+      hlower.2 (a + 1) (by omega) hq0_lt
+    have hlt1 : fracMul r (a + k * d + 1) < fracMul r (a + d + 1) :=
+      hlower.2 (a + d + 1) (by omega) hq1_lt
+    have hlt_min :
+        fracMul r (a + k * d + 1) <
+          min (fracMul r (a + 1)) (fracMul r (a + d + 1)) :=
+      lt_min hlt0 hlt1
+    exact not_lt_of_ge hlt_min.le hIoo.1
+  · have hgt0 : fracMul r (a + 1) < fracMul r (a + k * d + 1) :=
+      hupper.2 (a + 1) (by omega) hq0_lt
+    have hgt1 : fracMul r (a + d + 1) < fracMul r (a + k * d + 1) :=
+      hupper.2 (a + d + 1) (by omega) hq1_lt
+    have hmax_lt :
+        max (fracMul r (a + 1)) (fracMul r (a + d + 1)) <
+          fracMul r (a + k * d + 1) :=
+      max_lt hgt0 hgt1
+    exact not_lt_of_ge hmax_lt.le hIoo.2
+
+/-- Re-index the tail of the shifted AP as the translated orbit beginning at
+`q_2`. -/
+private theorem ap_later_index_shift (a d m : ℕ) :
+    a + (m + 2) * d + 1 = a + 2 * d + 1 + m * d := by
+  ring
+
+/-- Main irrational-case theorem: `A_r` contains no infinite arithmetic
+progression when `r` is irrational. -/
+theorem irrational_no_infiniteAP {r : ℝ} (hr : IsIrrational r) :
+    ¬ ContainsInfiniteAP (A r) := by
+  rintro ⟨a, d, hd, hAP⟩
+  have ha : 0 < a := ap_start_pos hAP
+  have hrecords := records_of_ap_mem_A hr ha hAP
+  let u : ℝ := min (fracMul r (a + 1)) (fracMul r (a + d + 1))
+  let v : ℝ := max (fracMul r (a + 1)) (fracMul r (a + d + 1))
+  have hbounds := ap_first_interval_bounds (r := r) hr (a := a) hd
+  have hu0 : 0 ≤ u := by simpa [u] using hbounds.1
+  have huv : u < v := by simpa [u, v] using hbounds.2.1
+  have hv1 : v < 1 := by simpa [v] using hbounds.2.2
+  have havoid :
+      ∀ k : ℕ, 2 ≤ k → fracMul r (a + k * d + 1) ∉ Set.Ioo u v := by
+    simpa [u, v] using later_records_avoid_first_interval (r := r)
+      (a := a) (d := d) hd hrecords
+  have hdense :=
+    denseRange_translated_nat_toAddCircle (r := r) hr (d := d) hd
+      (q₀ := a + 2 * d + 1)
+  rcases exists_fracMul_mem_Ioo_of_dense_toAddCircle hdense hu0 huv hv1 with
+    ⟨m, hmIoo⟩
+  have hq_shift : a + (m + 2) * d + 1 = a + 2 * d + 1 + m * d :=
+    ap_later_index_shift a d m
+  exact havoid (m + 2) (by omega) (by simpa [hq_shift] using hmIoo)
+
+end IrrationalityAr
+-- END: IrrationalCase.lean
+
+-- BEGIN: Characterization.lean
+
+namespace IrrationalityAr
+
+/-- Main characterization theorem. This belongs in a separate module so the
+rational and irrational directions remain independent and the import graph has
+no cycle. -/
+theorem rational_iff_eventuallyAP (r : ℝ) :
+    IsRational r ↔ IsEventuallyAP (A r) := by
+  constructor
+  · exact rational_eventuallyAP
+  · intro hAP
+    by_contra hirr
+    exact irrational_no_infiniteAP hirr (eventuallyAP_containsInfiniteAP hAP)
+
+/-- Rationality is also equivalent to the weaker-looking condition that `A r`
+contains an infinite arithmetic progression. -/
+theorem rational_iff_containsInfiniteAP (r : ℝ) :
+    IsRational r ↔ ContainsInfiniteAP (A r) := by
+  constructor
+  · intro hr
+    exact eventuallyAP_containsInfiniteAP ((rational_iff_eventuallyAP r).mp hr)
+  · intro hAP
+    by_contra hirr
+    exact irrational_no_infiniteAP hirr hAP
+
+/-- The no-infinite-arithmetic-progression theorem is an iff characterization
+of irrationality. -/
+theorem irrational_iff_noInfiniteAP (r : ℝ) :
+    IsIrrational r ↔ ¬ ContainsInfiniteAP (A r) := by
+  constructor
+  · exact irrational_no_infiniteAP
+  · intro hno hrat
+    exact hno ((rational_iff_containsInfiniteAP r).mp hrat)
+
+end IrrationalityAr
+-- END: Characterization.lean
+
+-- BEGIN: ContinuedFractions.lean
 
 open Filter
 open scoped BigOperators
@@ -6313,3 +7666,6 @@ theorem oddCFDenoms_ne_of_firstDiff_simplePartialQuotient
     exact hne hxy.symm
 
 end IrrationalityAr
+-- END: ContinuedFractions.lean
+
+

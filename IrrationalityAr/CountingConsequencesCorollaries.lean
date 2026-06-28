@@ -1,4 +1,4 @@
-import IrrationalityAr.CountingConsequences
+import IrrationalityAr.CountingConsequencesExtensions
 import IrrationalityAr.Ramanujan
 
 open Filter
@@ -13,31 +13,23 @@ noncomputable section
 # Corollaries of the counting-consequence layer
 
 This file packages the main counting results into reusable public forms:
-divergence, little-o density, eventual pairwise spacing, ratio-controlled seed
-subsequences, and the Ramanujan conditional count in terms of `ACount`.
+logarithmic lower bounds with zero density, eventual pairwise spacing,
+ratio-controlled seed subsequences, and the Ramanujan conditional count in
+terms of `ACount`.
 -/
 
-/-- The universal logarithmic lower bound implies that `A α` has counting
-function tending to infinity for every irrational `α`. -/
-theorem ACount_tendsto_atTop
+/-- Public counting package for irrational floor-sum sets: the exact universal
+logarithmic lower bound from the seed sequence, together with zero density in
+standard little-o notation. -/
+theorem ACount_log_lower_and_zeroDensity
     {α : ℝ} (hαirr : IsIrrational α) :
-    Tendsto (fun N : ℕ => ACount α N) atTop atTop := by
-  rw [tendsto_atTop_atTop]
-  intro (B : ℕ)
-  refine ⟨2 * 3 ^ B, ?_⟩
-  intro N hN
-  have hcap : 2 * 3 ^ B ≤ N + 1 := by omega
-  have hcount :
-      B + 1 ≤ ACount α N :=
-    one_add_le_ACount_of_two_mul_pow_le
-      (α := α) hαirr hcap
-  omega
-
-/-- The zero-density theorem in standard little-o notation. -/
-theorem ACount_isLittleO
-    {α : ℝ} (hαirr : IsIrrational α) :
-    (fun N : ℕ => (ACount α N : ℝ)) =o[atTop]
-      (fun N : ℕ => (N : ℝ)) := by
+    (∀ N : ℕ, 1 ≤ N →
+      Nat.log 3 ((N + 1) / 2) + 1 ≤ ACount α N) ∧
+      (fun N : ℕ => (ACount α N : ℝ)) =o[atTop]
+        (fun N : ℕ => (N : ℝ)) := by
+  refine ⟨
+    (fun N hN => one_add_log_three_half_le_ACount (α := α) hαirr hN),
+    ?_⟩
   rw [isLittleO_iff]
   intro ε hε
   have h := ACount_eventually_le_mul (α := α) hαirr ε hε
@@ -253,6 +245,170 @@ theorem exists_eventually_ACount_oneOverPi_floorExp_lower_of_Bauer_finiteMeasure
     exact_mod_cast hle
   exact hm.trans hleR
 
+lemma natSetCount_mono {S : Set ℕ} {N M : ℕ} (hNM : N ≤ M) :
+    natSetCount S N ≤ natSetCount S M := by
+  classical
+  unfold natSetCount
+  apply Finset.card_mono
+  intro x hx
+  rcases Finset.mem_filter.mp hx with ⟨hxN, hxS⟩
+  exact Finset.mem_filter.mpr
+    ⟨Finset.mem_Icc.mpr
+      ⟨(Finset.mem_Icc.mp hxN).1, le_trans (Finset.mem_Icc.mp hxN).2 hNM⟩, hxS⟩
+
+/-- Finite-measure Ramanujan checkpoint bounds imply a concrete affine-log lower bound
+    for `ACount (1 / π)` at all large `N`. -/
+theorem eventually_ACount_oneOverPi_affine_lower_of_Bauer_finiteMeasure
+    (hBauer : BauerRamanujanIdentity)
+    (hfin : HasFiniteIrrationalityMeasure (1 / Real.pi)) :
+    ∃ ρ Λ : ℝ,
+      0 < ρ ∧ 3 * Real.log 2 < Λ ∧
+      ∀ᶠ N : ℕ in atTop,
+        ρ * (Real.log N / Λ - 1) ≤ (ACount (1 / Real.pi) N : ℝ) := by
+  rcases exists_eventually_ACount_oneOverPi_floorExp_lower_of_Bauer_finiteMeasure
+      hBauer hfin with
+    ⟨ρ, Λ, hρ, hΛ, hprod⟩
+  have hΛpos : 0 < Λ := by
+    have hlog2pos : 0 < Real.log 2 := by
+      have h1 : (1 : ℝ) < 2 := by norm_num
+      exact Real.log_pos h1
+    have h : 3 * Real.log 2 < Λ := hΛ
+    nlinarith [h, hlog2pos]
+  rw [Filter.eventually_atTop] at hprod
+  rcases hprod with ⟨M0, hM0⟩
+  let N0 : ℕ := Nat.floor (Real.exp (Λ * (M0 : ℝ))) + 1
+  refine ⟨ρ, Λ, hρ, hΛ, ?_⟩
+  rw [Filter.eventually_atTop]
+  refine ⟨N0, ?_⟩
+  intro N hN
+  have hN0_ge_one : 1 ≤ N0 := by
+    dsimp [N0]
+    exact Nat.succ_le_succ (Nat.zero_le _)
+  have hN_ge_one : 1 ≤ N := hN0_ge_one.trans hN
+  have hNpos : 0 < (N : ℝ) := by exact_mod_cast hN_ge_one
+  let m : ℕ := Nat.floor (Real.log (N : ℝ) / Λ)
+  have hm_ge_M0 : M0 ≤ m := by
+    have hExp_lt : Real.exp (Λ * (M0 : ℝ)) < (N : ℝ) := by
+      have hlt_floor : Real.exp (Λ * (M0 : ℝ)) < (Nat.floor (Real.exp (Λ * (M0 : ℝ))) + 1) := by
+        simpa [Nat.cast_add, Nat.cast_one] using
+          (Nat.lt_floor_add_one (Real.exp (Λ * (M0 : ℝ))))
+      have hfloor_le : Nat.floor (Real.exp (Λ * (M0 : ℝ))) + 1 ≤ N := by
+        simpa [N0] using hN
+      exact lt_of_lt_of_le hlt_floor (by exact_mod_cast hfloor_le)
+    have hlog_lt : Λ * (M0 : ℝ) < Real.log (N : ℝ) := by
+      simpa [Real.log_exp] using (Real.log_lt_log (Real.exp_pos _) hExp_lt)
+    have hM0' : (M0 : ℝ) ≤ Real.log (N : ℝ) / Λ := by
+      have hΛ0 : Λ ≠ 0 := ne_of_gt hΛpos
+      have hmul : (M0 : ℝ) * Λ ≤ Real.log (N : ℝ) := by
+        simpa [mul_comm] using (le_of_lt hlog_lt)
+      have htmp' : (M0 : ℝ) * Λ * Λ⁻¹ ≤ (Real.log (N : ℝ)) * Λ⁻¹ := by
+        exact mul_le_mul_of_nonneg_right hmul (inv_nonneg.mpr (le_of_lt hΛpos))
+      simpa [div_eq_mul_inv, hΛ0, mul_assoc, mul_left_comm, mul_comm] using htmp'
+    exact Nat.le_floor hM0'
+  have hcheckpoint :
+      ρ * (m : ℝ) ≤
+        (ACount (1 / Real.pi) (Nat.floor (Real.exp (Λ * (m : ℝ))) : ℕ) : ℝ) :=
+    hM0 m hm_ge_M0
+  have hle_arg : Real.exp (Λ * (m : ℝ)) ≤ (N : ℝ) := by
+    have hmul : (m : ℝ) ≤ Real.log (N : ℝ) / Λ := by
+      have hN1R : (1 : ℝ) ≤ (N : ℝ) := by exact_mod_cast hN_ge_one
+      exact Nat.floor_le (by
+        apply div_nonneg
+        · exact Real.log_nonneg hN1R
+        · exact le_of_lt hΛpos)
+    have hmul' : (m : ℝ) * Λ ≤ Real.log (N : ℝ) / Λ * Λ := by
+      exact mul_le_mul_of_nonneg_right hmul (le_of_lt hΛpos)
+    have hmul'' : (m : ℝ) * Λ ≤ Real.log (N : ℝ) := by
+      have hrewrite : Real.log (N : ℝ) / Λ * Λ = Real.log (N : ℝ) := by
+        have hΛ0 : Λ ≠ 0 := ne_of_gt hΛpos
+        field_simp [hΛ0]
+      simpa [hrewrite] using hmul'
+    have hExp_le_log : Real.exp (Λ * (m : ℝ)) ≤ Real.exp (Real.log (N : ℝ)) :=
+      (Real.exp_le_exp).2 (by simpa [mul_comm] using hmul'')
+    simpa [Real.exp_log hNpos] using hExp_le_log
+  have hfloor_le : Nat.floor (Real.exp (Λ * (m : ℝ))) ≤ N := by
+    have hcast : ((Nat.floor (Real.exp (Λ * (m : ℝ))) : ℕ) : ℝ) ≤ (N : ℝ) := by
+      exact (Nat.floor_le (by positivity : (0 : ℝ) ≤ Real.exp (Λ * (m : ℝ)))).trans hle_arg
+    exact_mod_cast hcast
+  have hMono :
+      (ACount (1 / Real.pi) (Nat.floor (Real.exp (Λ * (m : ℝ))) : ℕ) : ℝ) ≤
+      (ACount (1 / Real.pi) N : ℝ) := by
+    exact_mod_cast (natSetCount_mono (S := A (1 / Real.pi)) hfloor_le)
+  have hm_le : Real.log (N : ℝ) / Λ - 1 ≤ m := by
+    have hfloor_lt : Real.log (N : ℝ) / Λ < (m : ℝ) + 1 :=
+      Nat.lt_floor_add_one (Real.log (N : ℝ) / Λ)
+    nlinarith
+  have hmulρ : ρ * (Real.log N / Λ - 1) ≤ ρ * (m : ℝ) :=
+    mul_le_mul_of_nonneg_left hm_le (le_of_lt hρ)
+  exact hmulρ.trans (hcheckpoint.trans hMono)
+
+/-- From finite-measure Ramanujan data, `ACount (1 / π)` is eventually
+bounded below by a positive multiple of `log N`. -/
+theorem eventually_ACount_oneOverPi_log_lower_of_Bauer_finiteMeasure
+    (hBauer : BauerRamanujanIdentity)
+    (hfin : HasFiniteIrrationalityMeasure (1 / Real.pi)) :
+    ∃ c : ℝ, 0 < c ∧
+      ∀ᶠ N : ℕ in atTop, c * Real.log N ≤ (ACount (1 / Real.pi) N : ℝ) := by
+  rcases eventually_ACount_oneOverPi_affine_lower_of_Bauer_finiteMeasure
+      hBauer hfin with
+    ⟨ρ, Λ, hρ, hΛ, hprod⟩
+  have hlog2pos : 0 < Real.log 2 := by
+    have h1 : (1 : ℝ) < 2 := by norm_num
+    exact Real.log_pos h1
+  have hΛpos : 0 < Λ := by
+    nlinarith [hΛ, hlog2pos]
+  have hΛ0 : Λ ≠ 0 := ne_of_gt hΛpos
+  let c : ℝ := ρ / (2 * Λ)
+  let N₁ : ℕ := Nat.floor (Real.exp (2 * Λ)) + 1
+  have hcpos : 0 < c := by
+    dsimp [c]
+    have h2Λpos : 0 < 2 * Λ := by nlinarith
+    exact div_pos hρ h2Λpos
+  rw [Filter.eventually_atTop] at hprod
+  rcases hprod with ⟨N₀, hN₀⟩
+  refine ⟨c, hcpos, ?_⟩
+  rw [Filter.eventually_atTop]
+  refine ⟨Nat.max N₀ N₁, ?_⟩
+  intro N hNmax
+  have hN₀' : N₀ ≤ N := Nat.le_trans (Nat.le_max_left N₀ N₁) hNmax
+  have hN₁' : N₁ ≤ N := Nat.le_trans (Nat.le_max_right N₀ N₁) hNmax
+  have hN₁pos : 1 ≤ N₁ := by
+    dsimp [N₁]
+    exact Nat.succ_le_succ (Nat.zero_le _)
+  have hNpos : 0 < (N : ℝ) := by
+    exact_mod_cast (hN₁pos.trans hN₁')
+  have hExp : Real.exp (2 * Λ) ≤ (N : ℝ) := by
+    have hExp_lt : Real.exp (2 * Λ) < (Nat.floor (Real.exp (2 * Λ)) + 1) := by
+      simpa [Nat.cast_add, Nat.cast_one] using
+        (Nat.lt_floor_add_one (Real.exp (2 * Λ)))
+    have hfloor_le : (Nat.floor (Real.exp (2 * Λ)) + 1) ≤ N := by
+      simpa [N₁] using hN₁'
+    have hfloor_cast' : ((Nat.floor (Real.exp (2 * Λ)) + 1 : ℕ) : ℝ) ≤ (N : ℝ) := by
+      exact_mod_cast hfloor_le
+    have hfloor_cast : ((Nat.floor (Real.exp (2 * Λ)) : ℕ) : ℝ) + 1 ≤ (N : ℝ) := by
+      simpa [Nat.cast_add, Nat.cast_one, add_comm, add_left_comm, add_assoc] using hfloor_cast'
+    exact le_of_lt (lt_of_lt_of_le hExp_lt hfloor_cast)
+  have hlog₂ : (2 : ℝ) * Λ ≤ Real.log (N : ℝ) := by
+    have hlogExp : Real.log (Real.exp (2 * Λ)) ≤ Real.log (N : ℝ) :=
+      Real.log_le_log (Real.exp_pos _) hExp
+    simpa [Real.log_exp] using hlogExp
+  have hdiv₂ : (2 : ℝ) ≤ Real.log (N : ℝ) / Λ := by
+    have htmp : (2 : ℝ) * Λ * Λ⁻¹ ≤ (Real.log (N : ℝ)) * Λ⁻¹ := by
+      exact mul_le_mul_of_nonneg_right hlog₂ (inv_nonneg.mpr (le_of_lt hΛpos))
+    simpa [div_eq_mul_inv, hΛ0, mul_assoc, mul_left_comm, mul_comm] using htmp
+  have hcheckpoint : ρ * (Real.log (N : ℝ) / Λ - 1) ≤
+      (ACount (1 / Real.pi) N : ℝ) :=
+    hN₀ N hN₀'
+  have hscale : ρ / (2 * Λ) * Real.log (N : ℝ) ≤ ρ * (Real.log (N : ℝ) / Λ - 1) := by
+    have htmp : (ρ / (2 * Λ)) * Real.log (N : ℝ) = (ρ / 2) * (Real.log (N : ℝ) / Λ) := by
+      field_simp [hΛ0, mul_assoc, mul_left_comm, mul_comm]
+    rw [htmp]
+    have hscale' : (ρ / 2) * (Real.log (N : ℝ) / Λ) ≤ ρ * (Real.log (N : ℝ) / Λ - 1) := by
+      nlinarith [hdiv₂, hρ]
+    exact hscale'
+  exact hscale.trans hcheckpoint
+
 end
 
 end IrrationalityAr
+

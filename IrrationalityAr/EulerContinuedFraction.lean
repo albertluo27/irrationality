@@ -1,5 +1,5 @@
-import IrrationalityAr.CanonicalBlockGrowth
-import Mathlib.MeasureTheory.Integral.IntervalIntegral.FundThmCalculus
+import IrrationalityAr.CanonicalEntropyDissociation
+
 
 open Filter
 open scoped Interval

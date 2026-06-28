@@ -1,10 +1,6 @@
-import Mathlib.Algebra.BigOperators.Fin
-import Mathlib.Data.Finset.Card
-import Mathlib.Data.Finset.Interval
-import Mathlib.Data.Finset.Powerset
-import Mathlib.Data.Finset.Sum
-import Mathlib.Combinatorics.Additive.Energy
-import Mathlib.Tactic
+import Mathlib
+import IrrationalityAr.ArithmeticCircleFoundation
+
 
 namespace IrrationalityAr
 

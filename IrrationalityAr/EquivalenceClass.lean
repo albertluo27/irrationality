@@ -1,6 +1,5 @@
-import IrrationalityAr.CanonicalBlockGrowth
-import IrrationalityAr.ContinuedFractions
-import IrrationalityAr.Characterization
+import IrrationalityAr.CriteriaLattice
+
 
 open scoped BigOperators
 
@@ -150,6 +149,19 @@ theorem equivalence_class_problem_normalized {α β : ℝ}
       _ = oddCFDenoms α :=
         hitDenoms_eq_oddCFDenoms hαpos hαirr
   exact oddCFDenoms_rigid_on_Icc hβirr hαirr hβI hαI hOdd
+
+/-- Iff form of the normalized equivalence-class theorem.  On the normalized
+interval `[1,2]`, equality of floor-sum divisibility sets is exactly equality
+of parameters. -/
+theorem equivalence_class_problem_normalized_iff {α β : ℝ}
+    (hαirr : IsIrrational α)
+    (hαI : α ∈ Set.Icc (1 : ℝ) 2)
+    (hβI : β ∈ Set.Icc (1 : ℝ) 2) :
+    A β = A α ↔ β = α := by
+  constructor
+  · exact equivalence_class_problem_normalized hαirr hαI hβI
+  · intro h
+    simp [h]
 
 /-! ## Symmetry and normalization interface
 
@@ -463,26 +475,6 @@ theorem exists_normalized_representative (r : ℝ) (hr : IsIrrational r) :
       norm_num
       ring
 
-/-- Every irrational has a normalized representative in `[1,2]` with the same
-actual floor-sum additive-energy exponent, and irrationality-measure predicates
-transfer from the representative back to the original real. -/
-theorem exists_normalized_representative_additiveEnergy_measure
-    (r : ℝ) (hr : IsIrrational r) :
-    ∃ r₀ : ℝ,
-      r₀ ∈ Set.Icc (1 : ℝ) 2 ∧
-        A r₀ = A r ∧
-          floorSumAAdditiveEnergyExponent r =
-            floorSumAAdditiveEnergyExponent r₀ ∧
-            (∀ μ : ℝ,
-              HasIrrationalityMeasure r₀ μ →
-                HasIrrationalityMeasure r μ) := by
-  rcases exists_normalized_representative r hr with
-    ⟨r₀, hr₀I, hAr₀, hr_mem⟩
-  refine ⟨r₀, hr₀I, hAr₀, ?_, ?_⟩
-  · exact floorSumAAdditiveEnergyExponent_congr hAr₀.symm
-  · intro μ hμ
-    exact HasIrrationalityMeasure_of_mem_symmetryClass hμ hr_mem
-
 /-- Symmetric version of the normalized representative package: the normalized
 representative has the same `A`-set, the same floor-sum additive-energy
 exponent, and exactly the same literal irrationality-measure predicates. -/
@@ -790,11 +782,12 @@ theorem mem_symmetryClass_of_A_eq {α β : ℝ}
   have hα₀irr : IsIrrational α₀ :=
     irrational_of_A_eq_irrational hαirr hAα₀
   have hβ₀_eq_α₀ : β₀ = α₀ := by
-    apply equivalence_class_problem_normalized hα₀irr hα₀I hβ₀I
-    calc
-      A β₀ = A β := hAβ₀
-      _ = A α := hA
-      _ = A α₀ := hAα₀.symm
+    exact (equivalence_class_problem_normalized_iff hα₀irr hα₀I hβ₀I).mp
+      (by
+        calc
+          A β₀ = A β := hAβ₀
+          _ = A α := hA
+          _ = A α₀ := hAα₀.symm)
   subst β₀
   have hα₀_mem_α : α₀ ∈ symmetryClass α :=
     symmetryClass_symm hαorbit

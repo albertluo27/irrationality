@@ -1,5 +1,8 @@
 import IrrationalityAr.CanonicalBlockGrowth
 
+
+import IrrationalityAr.ArithmeticCircleFoundation
+
 open Filter
 open scoped BigOperators
 open scoped Topology

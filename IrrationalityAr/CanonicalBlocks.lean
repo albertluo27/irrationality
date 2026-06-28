@@ -1,9 +1,5 @@
-import IrrationalityAr.ContinuedFractions
 import IrrationalityAr.AdditiveBlockBridge
-import Mathlib.Analysis.SpecialFunctions.Log.Basic
-import Mathlib.Data.Nat.Fib.Basic
-import Mathlib.Data.Nat.Log
-import Mathlib.Topology.Algebra.Order.LiminfLimsup
+
 
 /-! ## Merged from IrrationalityAr/Blocks/BlockCore.lean -/
 
@@ -1572,4 +1568,3 @@ theorem hilbertCubeExponent_congr
   rw [hST N]
 
 end IrrationalityAr
-

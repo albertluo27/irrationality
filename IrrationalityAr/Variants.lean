@@ -1,4 +1,4 @@
-import IrrationalityAr.Basic
+import IrrationalityAr.ArithmeticCircleFoundation
 
 open scoped BigOperators
 
@@ -35,9 +35,5 @@ noncomputable def nearestMul (r : ℝ) (n : ℕ) : ℤ :=
 /-- Nearest-integer analogue of the sum. -/
 noncomputable def nearestSum (r : ℝ) (n : ℕ) : ℤ :=
   ∑ k ∈ Finset.Icc 1 n, nearestMul r k
-
-/-- Nearest-integer analogue of `A_r`. -/
-def ANearest (r : ℝ) : Set ℕ :=
-  {n | 0 < n ∧ (n : ℤ) ∣ nearestSum r n}
 
 end IrrationalityAr

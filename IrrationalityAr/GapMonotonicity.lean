@@ -1,5 +1,5 @@
-import IrrationalityAr.CanonicalBlockGrowth
 import IrrationalityAr.EquivalenceClass
+
 
 /-!
 # Gap monotonicity for arbitrary irrational parameters

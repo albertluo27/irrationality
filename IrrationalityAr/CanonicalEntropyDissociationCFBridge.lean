@@ -1,4 +1,5 @@
-import IrrationalityAr.CanonicalEntropyDissociation
+import IrrationalityAr.Ramanujan
+
 
 open Filter
 open scoped BigOperators Topology

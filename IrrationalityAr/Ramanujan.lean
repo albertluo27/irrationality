@@ -1,10 +1,7 @@
-import Mathlib.NumberTheory.Real.GoldenRatio
-import Mathlib.Analysis.Real.Pi.Bounds
-import Mathlib.Analysis.Real.Pi.Irrational
-import IrrationalityAr.CanonicalBlockGrowth
-import IrrationalityAr.ContinuedFractions
-import IrrationalityAr.CountingConsequences
-import IrrationalityAr.AdditiveBlockBridge
+import IrrationalityAr.EulerContinuedFraction
+
+
+import IrrationalityAr.ArithmeticCircleFoundation
 
 /-! ## Merged from IrrationalityAr/RamanujanCertifiedSubsequence.lean -/
 
@@ -1334,7 +1331,7 @@ def rationalLinearTrial (K D : ℕ) : ℕ → ℕ :=
   fun m => (K * m) / D
 
 /-- The rational linear trial is eventually linearly lower-bounded by every
-constant strictly below `K/D`. -/
+fixed value strictly below `K/D`. -/
 theorem eventuallyLinearLowerBound_rationalLinearTrial
     {K D : ℕ} (hD : 0 < D) {c : ℝ}
     (hc : c < (K : ℝ) / (D : ℝ)) :
@@ -1640,7 +1637,7 @@ theorem eventuallyLogAffineUpperBound_rationalNatLogTrial
         ring
 
 /-- The rational `Nat.log 2` trial is logarithmically lower-bounded by every
-constant strictly below `(K/D)/log 2`. -/
+fixed value strictly below `(K/D)/log 2`. -/
 theorem eventuallyLogLowerBound_rationalNatLogTrial
     {K D : ℕ} (hD : 0 < D) {c : ℝ}
     (hc : c < (((K : ℝ) / (D : ℝ)) / Real.log 2)) :
@@ -5061,6 +5058,175 @@ lemma path293_high_farey :
 lemma invPi_ne_path_293 :
     invPi ≠ ratValue (ramanujanP 293) (ramanujanQ 293) := by
   exact ne_ratValue_of_isIrrational invPi_isIrrational _ _
+
+theorem noSmallDenominatorBetween_left_of_fareyBracket
+    {α : ℝ} {p q r s : ℕ}
+    (hq : 0 < q) (hs : 0 < s)
+    (hfarey : q * r = p * s + 1)
+    (hbracket : ratValue p q < α ∧ α < ratValue r s) :
+    NoSmallDenominatorBetween α p q := by
+  intro c d hd hdq hbetween
+  rcases hbetween with h | h
+  · have : α < ratValue p q := h.1.trans h.2
+    exact (not_lt_of_ge hbracket.1.le) this
+  · have hbetween' :
+        ratValue p q < ratValue c d ∧
+          ratValue c d < ratValue r s :=
+      ⟨h.1, h.2.trans hbracket.2⟩
+    have hden := farey_neighbor_denominator_lower_bound
+      hq hs hd hfarey hbetween'
+    omega
+
+/-- The right endpoint of a determinant-one bracket is a one-sided best
+approximation. -/
+theorem noSmallDenominatorBetween_right_of_fareyBracket
+    {α : ℝ} {p q r s : ℕ}
+    (hq : 0 < q) (hs : 0 < s)
+    (hfarey : q * r = p * s + 1)
+    (hbracket : ratValue p q < α ∧ α < ratValue r s) :
+    NoSmallDenominatorBetween α r s := by
+  intro c d hd hds hbetween
+  rcases hbetween with h | h
+  · have hbetween' :
+        ratValue p q < ratValue c d ∧
+          ratValue c d < ratValue r s :=
+      ⟨hbracket.1.trans h.1, h.2⟩
+    have hden := farey_neighbor_denominator_lower_bound
+      hq hs hd hfarey hbetween'
+    omega
+  · have : ratValue r s < α := h.1.trans h.2
+    exact (not_lt_of_ge hbracket.2.le) this
+
+/-- Odd left endpoint of a Farey bracket gives an element of `A α`. -/
+theorem left_fareyBracket_mem_A
+    {α : ℝ} {p q r s : ℕ}
+    (hαpos : 0 < α) (hαirr : IsIrrational α)
+    (hq : 2 ≤ q) (hs : 0 < s)
+    (hred : ReducedFraction p q)
+    (hfarey : q * r = p * s + 1)
+    (hbracket : ratValue p q < α ∧ α < ratValue r s)
+    (hpodd : Odd p) :
+    q - 1 ∈ A α := by
+  have hbest := noSmallDenominatorBetween_left_of_fareyBracket
+    (by omega : 0 < q) hs hfarey hbracket
+  have hcf :=
+    (no_small_denominator_iff_convergent_or_semiconvergent
+      hαpos hαirr hq hred).1 hbest
+  exact mem_A_of_odd_convergent_or_semiconvergent
+    hαpos hαirr hq hred hcf hpodd
+
+/-- Odd right endpoint of a Farey bracket gives an element of `A α`. -/
+theorem right_fareyBracket_mem_A
+    {α : ℝ} {p q r s : ℕ}
+    (hαpos : 0 < α) (hαirr : IsIrrational α)
+    (hq : 0 < q) (hs : 2 ≤ s)
+    (hred : ReducedFraction r s)
+    (hfarey : q * r = p * s + 1)
+    (hbracket : ratValue p q < α ∧ α < ratValue r s)
+    (hrodd : Odd r) :
+    s - 1 ∈ A α := by
+  have hbest := noSmallDenominatorBetween_right_of_fareyBracket
+    hq (by omega : 0 < s) hfarey hbracket
+  have hcf :=
+    (no_small_denominator_iff_convergent_or_semiconvergent
+      hαpos hαirr hs hred).1 hbest
+  exact mem_A_of_odd_convergent_or_semiconvergent
+    hαpos hαirr hs hred hcf hrodd
+
+/-- A determinant-one bracket certifies at least one endpoint denominator.
+The reducedness assumptions are intentionally explicit in this first API. -/
+theorem fareyBracket_certifies_A
+    {α : ℝ} {p q r s : ℕ}
+    (hαpos : 0 < α) (hαirr : IsIrrational α)
+    (hq : 2 ≤ q) (hs : 2 ≤ s)
+    (hredL : ReducedFraction p q)
+    (hredR : ReducedFraction r s)
+    (hfarey : q * r = p * s + 1)
+    (hbracket : ratValue p q < α ∧ α < ratValue r s) :
+    q - 1 ∈ A α ∨ s - 1 ∈ A α := by
+  rcases Nat.even_or_odd p with hpEven | hpOdd
+  · rcases Nat.even_or_odd r with hrEven | hrOdd
+    · exfalso
+      have hleftEven : Even (q * r) := hrEven.mul_left q
+      have hrightOdd : Odd (p * s + 1) := by
+        have hpsEven : Even (p * s) := by
+          simpa [Nat.mul_comm] using hpEven.mul_left s
+        exact hpsEven.add_one
+      have hleftOdd : Odd (q * r) := by simpa [hfarey] using hrightOdd
+      exact (Nat.not_even_iff_odd.mpr hleftOdd) hleftEven
+    · exact Or.inr <| right_fareyBracket_mem_A
+        hαpos hαirr (by omega) hs hredR hfarey hbracket hrOdd
+  · exact Or.inl <| left_fareyBracket_mem_A
+      hαpos hαirr hq (by omega) hredL hfarey hbracket hpOdd
+
+/-- Determinant one also supplies reducedness of the left endpoint. -/
+lemma reducedFraction_left_of_fareyDet
+    {p q r s : ℕ}
+    (hq : 0 < q)
+    (hfarey : q * r = p * s + 1) :
+    ReducedFraction p q := by
+  refine ⟨hq, ?_⟩
+  rw [Nat.coprime_iff_gcd_eq_one]
+  let g : ℕ := Nat.gcd p q
+  have hgp : g ∣ p := Nat.gcd_dvd_left _ _
+  have hgq : g ∣ q := Nat.gcd_dvd_right _ _
+  have hgpZ : (g : ℤ) ∣ (p : ℤ) := by exact_mod_cast hgp
+  have hgqZ : (g : ℤ) ∣ (q : ℤ) := by exact_mod_cast hgq
+  have hdetZ :
+      (q : ℤ) * (r : ℤ) - (p : ℤ) * (s : ℤ) = 1 := by
+    have hcast : (q * r : ℤ) = (p * s + 1 : ℕ) := by
+      exact_mod_cast hfarey
+    omega
+  have hgOneZ : (g : ℤ) ∣ (1 : ℤ) := by
+    rw [← hdetZ]
+    exact dvd_sub
+      (dvd_mul_of_dvd_left hgqZ _)
+      (dvd_mul_of_dvd_left hgpZ _)
+  have hgOne : g ∣ 1 := by exact_mod_cast hgOneZ
+  exact Nat.dvd_one.mp hgOne
+
+/-- Determinant one also supplies reducedness of the right endpoint. -/
+lemma reducedFraction_right_of_fareyDet
+    {p q r s : ℕ}
+    (hs : 0 < s)
+    (hfarey : q * r = p * s + 1) :
+    ReducedFraction r s := by
+  refine ⟨hs, ?_⟩
+  rw [Nat.coprime_iff_gcd_eq_one]
+  let g : ℕ := Nat.gcd r s
+  have hgr : g ∣ r := Nat.gcd_dvd_left _ _
+  have hgs : g ∣ s := Nat.gcd_dvd_right _ _
+  have hgrZ : (g : ℤ) ∣ (r : ℤ) := by exact_mod_cast hgr
+  have hgsZ : (g : ℤ) ∣ (s : ℤ) := by exact_mod_cast hgs
+  have hdetZ :
+      (q : ℤ) * (r : ℤ) - (p : ℤ) * (s : ℤ) = 1 := by
+    have hcast : (q * r : ℤ) = (p * s + 1 : ℕ) := by
+      exact_mod_cast hfarey
+    omega
+  have hgOneZ : (g : ℤ) ∣ (1 : ℤ) := by
+    rw [← hdetZ]
+    exact dvd_sub
+      (dvd_mul_of_dvd_right hgrZ _)
+      (dvd_mul_of_dvd_right hgsZ _)
+  have hgOne : g ∣ 1 := by exact_mod_cast hgOneZ
+  exact Nat.dvd_one.mp hgOne
+
+/-- Clean Farey certificate: determinant one, positive denominators, and the
+bracket alone imply that at least one shifted endpoint denominator lies in
+`A α`. -/
+theorem fareyBracket_certifies_A_of_det
+    {α : ℝ} {p q r s : ℕ}
+    (hαpos : 0 < α) (hαirr : IsIrrational α)
+    (hq : 2 ≤ q) (hs : 2 ≤ s)
+    (hfarey : q * r = p * s + 1)
+    (hbracket : ratValue p q < α ∧ α < ratValue r s) :
+    q - 1 ∈ A α ∨ s - 1 ∈ A α := by
+  exact fareyBracket_certifies_A
+    hαpos hαirr hq hs
+    (reducedFraction_left_of_fareyDet (by omega) hfarey)
+    (reducedFraction_right_of_fareyDet (by omega) hfarey)
+    hfarey hbracket
+
 
 lemma ramanujan_path_reduced (t : ℕ) :
     ReducedFraction (ramanujanP t) (ramanujanQ t) := by
@@ -9686,4 +9852,3 @@ theorem blockEntropy_LimsupLeAtTop_comp_iff_of_depth
 end
 
 end IrrationalityAr
-

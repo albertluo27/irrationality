@@ -1,4 +1,5 @@
-import IrrationalityAr.Ramanujan
+import IrrationalityAr.ReciprocalBlockDuality
+
 
 open scoped BigOperators
 

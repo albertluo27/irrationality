@@ -1,11 +1,5 @@
 import IrrationalityAr.CanonicalBlocks
-import IrrationalityAr.AdditiveBlockBridge
-import Mathlib.Analysis.SpecialFunctions.Log.Basic
-import Mathlib.Analysis.SpecialFunctions.Log.Base
-import Mathlib.Analysis.SpecialFunctions.Pow.Asymptotics
-import Mathlib.Data.Nat.Log
-import Mathlib.Data.Nat.Fib.Basic
-import Mathlib.Topology.Algebra.Order.LiminfLimsup
+
 
 open Filter
 open Asymptotics
